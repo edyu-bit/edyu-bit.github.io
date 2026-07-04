@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>保有ポジ管理 — HOLDINGS EDITOR</title>
+<style>
+:root{--bg:#0a0e14;--panel:#11161f;--panel2:#161d29;--border:#1f2733;
+--text:#d8e0ea;--muted:#6b7889;--up:#ff5c5c;--down:#4d9fff;
+--warn:#ffb454;--ok:#7dd3a0;--accent:#e8c470}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);
+font-family:'Noto Sans JP','Hiragino Sans',sans-serif;font-size:14px;line-height:1.6}
+.mono{font-family:'JetBrains Mono',Consolas,monospace}
+header{padding:16px 20px;border-bottom:1px solid var(--border)}
+header h1{font-size:16px;font-weight:700}
+header h1 span{color:var(--accent)}
+header p{font-size:11px;color:var(--muted)}
+main{padding:16px;max-width:640px;margin:0 auto}
+.card{background:var(--panel);border:1px solid var(--border);
+border-radius:6px;padding:16px;margin-bottom:14px}
+.card h2{font-size:12px;color:var(--accent);letter-spacing:.06em;margin-bottom:10px}
+label{font-size:11px;color:var(--muted);display:block;margin-bottom:3px}
+input{background:var(--panel2);border:1px solid var(--border);color:var(--text);
+padding:8px 10px;border-radius:4px;font-size:13px;width:100%;font-family:inherit}
+input:focus{outline:none;border-color:var(--accent)}
+.field{margin-bottom:10px}
+.row{display:flex;gap:8px;align-items:flex-end}
+.row .field{flex:1;margin-bottom:0}
+button{background:var(--accent);color:#0a0e14;border:none;padding:9px 16px;
+border-radius:4px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit}
+button.ghost{background:none;border:1px solid var(--border);color:var(--text);font-weight:500}
+button:disabled{opacity:.4;cursor:not-allowed}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.chip{display:flex;align-items:center;gap:6px;background:var(--panel2);
+border:1px solid var(--border);border-radius:4px;padding:5px 8px 5px 12px;font-size:13px}
+.chip b{letter-spacing:.03em}
+.chip .fr{font-size:11px}
+.chip button{background:none;border:none;color:var(--muted);font-size:15px;
+padding:0 4px;font-weight:400}
+.chip button:hover{color:var(--up)}
+.up{color:var(--up)}.down{color:var(--down)}.ok{color:var(--ok)}.warn{color:var(--warn)}
+.msg{font-size:12px;padding:8px 12px;border-radius:4px;margin-top:10px;display:none}
+.msg.show{display:block}
+.msg.ok{border:1px solid var(--ok);color:var(--ok);background:rgba(125,211,160,.06)}
+.msg.err{border:1px solid var(--up);color:var(--up);background:rgba(255,92,92,.07)}
+.small{font-size:11px;color:var(--muted)}
+details{margin-top:6px}
+summary{font-size:12px;color:var(--muted);cursor:pointer}
+.dirty{color:var(--warn);font-size:11px;display:none}
+.dirty.show{display:inline}
+</style>
+</head>
+<body>
+<header>
+  <h1>保有ポジ管理 <span>HOLDINGS EDITOR</span></h1>
+  <p>holdings.json をリポジトリ上で直接編集 → 次回スキャンから自動反映</p>
+</header>
+<main>
+
+<div class="card">
+  <h2>保有銘柄 <span class="dirty" id="dirty">● 未保存の変更あり</span></h2>
+  <div class="chips" id="chips"><span class="small">読み込み中…</span></div>
+  <div class="row">
+    <div class="field"><label>コイン追加(ベース通貨名)</label>
+      <input id="addSym" placeholder="XPL" class="mono" autocapitalize="characters"></div>
+    <button class="ghost" id="addBtn">追加</button>
+    <button id="saveBtn">保存(コミット)</button>
+  </div>
+  <div class="msg" id="msg"></div>
+  <div style="margin-top:12px">
+    <label>タップで追加(出来高上位・Bybit)</label>
+    <div class="chips" id="picker"><span class="small">読み込み中…</span></div>
+  </div>
+  <p class="small" style="margin-top:8px">
+    ファンディング表示: Bybitの現在値・年率換算(参考)。
+    <span class="up">赤=支払い側(ロング維持コスト)</span> /
+    <span class="down">青=受取側(ショート圧)</span>
+  </p>
+</div>
+
+<div class="card">
+  <details id="cfgBox">
+    <summary>接続設定(初回のみ)</summary>
+    <div style="margin-top:10px">
+      <div class="row" style="margin-bottom:10px">
+        <div class="field"><label>Owner</label><input id="cfgOwner" class="mono"></div>
+        <div class="field"><label>Repo</label><input id="cfgRepo" class="mono"></div>
+        <div class="field"><label>Branch</label><input id="cfgBranch" class="mono"></div>
+      </div>
+      <div class="field"><label>ファイルパス</label>
+        <input id="cfgPath" class="mono"></div>
+      <div class="field"><label>GitHub Personal Access Token(Fine-grained推奨)</label>
+        <input id="cfgToken" type="password" class="mono" placeholder="github_pat_..."></div>
+      <button class="ghost" id="cfgSave">設定を保存</button>
+      <p class="small" style="margin-top:8px">
+        トークンは<b>この端末のlocalStorageのみ</b>に保存(送信先はGitHub APIだけ)。
+        Fine-grainedトークンで対象を<b>このリポジトリ1つ+Contents権限(Read/Write)のみ</b>
+        に絞って発行してください。それ以上の権限は付けないこと。
+      </p>
+    </div>
+  </details>
+</div>
+
+</main>
+<script>
+const LS='holdings_editor_cfg';
+let cfg = Object.assign(
+  {owner:'edyu-bit', repo:'level', branch:'main', path:'holdings.json', token:''},
+  JSON.parse(localStorage.getItem(LS)||'{}'));
+let holdings=[], sha=null, dirty=false, funding={};
+const $=id=>document.getElementById(id);
+
+function showMsg(text, ok){
+  const m=$('msg'); m.textContent=text;
+  m.className='msg show '+(ok?'ok':'err');
+}
+function setDirty(v){dirty=v;$('dirty').classList.toggle('show',v)}
+
+// ---------- GitHub API ----------
+const api=(path,opt={})=>fetch(
+  `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/${path}`,
+  {...opt, headers:{
+    'Accept':'application/vnd.github+json',
+    ...(cfg.token?{'Authorization':'Bearer '+cfg.token}:{}),
+    ...(opt.headers||{})}});
+
+async function loadHoldings(){
+  try{
+    const r=await api(`contents/${cfg.path}?ref=${cfg.branch}`);
+    if(r.status===404){ holdings=[]; sha=null;
+      showMsg('holdings.json が未作成。追加→保存で新規作成されます', true);
+      render(); return; }
+    if(!r.ok) throw new Error('GitHub API '+r.status);
+    const j=await r.json();
+    sha=j.sha;
+    const decoded=decodeURIComponent(escape(atob(j.content.replace(/\n/g,''))));
+    holdings=(JSON.parse(decoded).holdings||[]).map(s=>String(s).toUpperCase());
+    render();
+    loadFunding();
+  }catch(e){
+    showMsg('読み込み失敗: '+e.message+(cfg.token?'':' (プライベートリポジトリならトークン設定が必要)'), false);
+    $('chips').innerHTML='<span class="small">—</span>';
+  }
+}
+
+async function saveHoldings(){
+  if(!cfg.token){ showMsg('保存にはトークンが必要です(下の接続設定から)', false);
+    $('cfgBox').open=true; return; }
+  $('saveBtn').disabled=true;
+  try{
+    const body={
+      message:'update holdings via editor [skip ci]',
+      content:btoa(unescape(encodeURIComponent(
+        JSON.stringify({holdings:holdings},null,1)+'\n'))),
+      branch:cfg.branch};
+    if(sha) body.sha=sha;
+    const r=await api(`contents/${cfg.path}`,
+      {method:'PUT', body:JSON.stringify(body)});
+    if(!r.ok){const j=await r.json().catch(()=>({}));
+      throw new Error(r.status+' '+(j.message||''));}
+    const j=await r.json();
+    sha=j.content.sha;
+    setDirty(false);
+    showMsg('コミット完了。次回スキャン(3時間おき)から反映されます', true);
+  }catch(e){ showMsg('保存失敗: '+e.message, false); }
+  $('saveBtn').disabled=false;
+}
+
+// ---------- ファンディング表示(Bybit公開API) ----------
+let topSymbols=[];
+async function loadFunding(){
+  try{
+    const r=await fetch('https://api.bybit.com/v5/market/tickers?category=linear');
+    const j=await r.json();
+    funding={}; const rows=[];
+    for(const t of (j.result?.list||[])){
+      if(!t.symbol.endsWith('USDT')) continue;
+      const base=t.symbol.slice(0,-4);
+      const fr=parseFloat(t.fundingRate||0);
+      const to=parseFloat(t.turnover24h||0);
+      if(!isNaN(fr)) funding[base]=fr*3*365*100; // 8h仮定の年率%
+      if(!isNaN(to)) rows.push({base,to});
+    }
+    rows.sort((a,b)=>b.to-a.to);
+    topSymbols=rows.slice(0,24).map(r=>r.base);
+    render(); renderPicker();
+  }catch(e){
+    $('picker').innerHTML='<span class="small">取得失敗(編集・保存は可能)</span>';
+  }
+}
+function renderPicker(){
+  const p=$('picker');
+  const avail=topSymbols.filter(s=>!holdings.includes(s));
+  if(!avail.length){p.innerHTML='<span class="small">—</span>';return;}
+  p.innerHTML=avail.map(s=>
+    `<span class="chip" style="cursor:pointer" onclick="pickCoin('${s}')">`+
+    `<b class="mono">＋${s}</b></span>`).join('');
+}
+window.pickCoin=s=>{
+  if(!holdings.includes(s)){holdings.push(s);holdings.sort();
+    setDirty(true);render();renderPicker();}
+};
+
+// ---------- UI ----------
+function render(){
+  const c=$('chips');
+  if(!holdings.length){
+    c.innerHTML='<span class="small">保有銘柄なし。下から追加してください。</span>';
+    return;
+  }
+  c.innerHTML=holdings.map(h=>{
+    const f=funding[h];
+    let fr='';
+    if(f!==undefined){
+      const cls=f>0?'up':'down';
+      fr=`<span class="fr mono ${cls}">${f>0?'+':''}${f.toFixed(1)}%/年</span>`;
+    }
+    return `<span class="chip"><b class="mono">${h}</b>${fr}
+      <button onclick="removeCoin('${h}')" title="削除">×</button></span>`;
+  }).join('');
+}
+window.removeCoin=h=>{
+  holdings=holdings.filter(x=>x!==h);
+  setDirty(true); render();
+  if(typeof renderPicker==='function') renderPicker();
+};
+$('addBtn').onclick=()=>{
+  const v=$('addSym').value.trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
+  if(!v) return;
+  if(!holdings.includes(v)){ holdings.push(v); setDirty(true); render(); }
+  $('addSym').value='';
+};
+$('addSym').addEventListener('keydown',e=>{
+  if(e.key==='Enter'){e.preventDefault();$('addBtn').click();}});
+$('saveBtn').onclick=saveHoldings;
+
+// ---------- 設定 ----------
+function fillCfg(){
+  $('cfgOwner').value=cfg.owner; $('cfgRepo').value=cfg.repo;
+  $('cfgBranch').value=cfg.branch; $('cfgPath').value=cfg.path;
+  $('cfgToken').value=cfg.token;
+}
+$('cfgSave').onclick=()=>{
+  cfg={owner:$('cfgOwner').value.trim(), repo:$('cfgRepo').value.trim(),
+       branch:$('cfgBranch').value.trim()||'main',
+       path:$('cfgPath').value.trim()||'holdings.json',
+       token:$('cfgToken').value.trim()};
+  localStorage.setItem(LS,JSON.stringify(cfg));
+  showMsg('設定を保存しました', true);
+  loadHoldings();
+};
+window.addEventListener('beforeunload',e=>{
+  if(dirty){e.preventDefault();e.returnValue='';}});
+
+fillCfg();
+if(!cfg.token) $('cfgBox').open=true;
+loadHoldings();
+</script>
+</body>
+</html>
