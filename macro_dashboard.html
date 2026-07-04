@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>マクロ・ダッシュボード — MARKET STRUCTURE</title>
+<style>
+:root{--bg:#0a0e14;--panel:#11161f;--panel2:#161d29;--border:#1f2733;
+--text:#d8e0ea;--muted:#6b7889;--up:#ff5c5c;--down:#4d9fff;
+--warn:#ffb454;--ok:#7dd3a0;--accent:#e8c470}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);
+font-family:'Noto Sans JP','Hiragino Sans',sans-serif;font-size:14px;line-height:1.6}
+.mono{font-family:'JetBrains Mono',Consolas,monospace}
+header{padding:14px 18px;border-bottom:1px solid var(--border);
+display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px}
+header h1{font-size:15px;font-weight:700}
+header h1 span{color:var(--accent)}
+#upd{font-size:11px;color:var(--muted)}
+main{padding:14px;max-width:860px;margin:0 auto}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+.card{background:var(--panel);border:1px solid var(--border);
+border-radius:6px;padding:14px}
+.card h3{font-size:11px;color:var(--muted);letter-spacing:.08em;margin-bottom:6px}
+.big{font-size:26px;font-weight:700}
+.sub{font-size:11px;color:var(--muted);margin-top:4px}
+.section{margin-bottom:16px}
+.section>h2{font-size:12px;color:var(--accent);letter-spacing:.06em;margin:14px 0 10px}
+.up{color:var(--up)}.down{color:var(--down)}.warn{color:var(--warn)}.ok{color:var(--ok)}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{text-align:left;color:var(--muted);font-weight:500;font-size:11px;
+padding:6px;border-bottom:1px solid var(--border)}
+td{padding:6px;border-bottom:1px solid var(--border)}
+button{background:var(--accent);color:#0a0e14;border:none;padding:8px 16px;
+border-radius:4px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit}
+.bar{height:14px;background:var(--panel2);border:1px solid var(--border);
+border-radius:3px;overflow:hidden;display:flex;margin-top:6px}
+.bar div{height:100%}
+.small{font-size:11px;color:var(--muted)}
+.err{color:var(--up);font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>マクロ・ダッシュボード <span>MARKET STRUCTURE</span></h1>
+  <div><button id="reload">更新</button> <span id="upd" class="mono"></span></div>
+</header>
+<main>
+
+<div class="section">
+  <h2>ドミナンス構造(CoinGecko)</h2>
+  <div class="grid">
+    <div class="card"><h3>BTCドミナンス</h3>
+      <div class="big mono" id="btcd">—</div><div class="sub" id="btcdNote"></div></div>
+    <div class="card"><h3>ETHドミナンス</h3>
+      <div class="big mono" id="ethd">—</div><div class="sub"></div></div>
+    <div class="card"><h3>ステーブル比率(USDT+USDC)</h3>
+      <div class="big mono" id="stbl">—</div>
+      <div class="sub" id="stblNote"></div></div>
+  </div>
+  <div class="card" style="margin-top:12px">
+    <h3>市場構成</h3>
+    <div class="bar" id="domBar"></div>
+    <p class="small" style="margin-top:6px">
+      <span class="up">■BTC</span> <span style="color:#9d7dd3">■ETH</span>
+      <span class="ok">■ステーブル</span> <span class="warn">■その他アルト</span>
+      — ステーブル比率上昇=待機資金増(下落時は逃避、底値圏では燃料)</p>
+  </div>
+</div>
+
+<div class="section">
+  <h2>オプション市場(Deribit・BTC)</h2>
+  <div class="grid">
+    <div class="card"><h3>DVOL(30日IV指数)</h3>
+      <div class="big mono" id="dvol">—</div><div class="sub" id="dvolNote"></div></div>
+    <div class="card"><h3>Put/Call出来高比</h3>
+      <div class="big mono" id="pcr">—</div>
+      <div class="sub" id="pcrNote"></div></div>
+    <div class="card"><h3>25Δスキュー近似</h3>
+      <div class="big mono" id="skew">—</div>
+      <div class="sub">プット遠OTMのIV − コール遠OTMのIV。プラス=下落ヘッジ需要優勢</div></div>
+  </div>
+  <div class="card" style="margin-top:12px">
+    <h3>出来高急増オプション(24h上位)</h3>
+    <table><thead><tr><th>銘柄</th><th>種別</th><th>24h出来高(BTC)</th><th>OI</th><th>Mark IV</th></tr></thead>
+    <tbody id="optBody"><tr><td colspan="5" class="small">読み込み中…</td></tr></tbody></table>
+    <p class="small" style="margin-top:6px">特定の行使価格に出来高が集中=大口がそのラインを意識。
+    満期日と行使価格はマグネット/防衛ラインの候補</p>
+  </div>
+</div>
+
+<p class="small" id="errBox"></p>
+
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const errs=[];
+function fail(name,e){errs.push(`${name}: ${e.message||e}`);
+  $('errBox').innerHTML='<span class="err">'+errs.join(' / ')+'</span>';}
+
+async function loadDominance(){
+  try{
+    const j=await (await fetch('https://api.coingecko.com/api/v3/global')).json();
+    const p=j.data.market_cap_percentage;
+    const btc=p.btc||0, eth=p.eth||0;
+    const stbl=(p.usdt||0)+(p.usdc||0);
+    $('btcd').textContent=btc.toFixed(2)+'%';
+    $('ethd').textContent=eth.toFixed(2)+'%';
+    $('stbl').textContent=stbl.toFixed(2)+'%';
+    $('btcdNote').textContent=btc>58?'資金がBTCに退避(アルト厳冬)':btc<48?'アルトへ資金拡散':'中間帯';
+    $('stblNote').textContent=stbl>9?'待機資金が歴史的高水準':stbl>7?'待機資金厚め':'リスク資産に資金滞留';
+    const other=Math.max(0,100-btc-eth-stbl);
+    $('domBar').innerHTML=
+      `<div style="width:${btc}%;background:#ff5c5c"></div>`+
+      `<div style="width:${eth}%;background:#9d7dd3"></div>`+
+      `<div style="width:${stbl}%;background:#7dd3a0"></div>`+
+      `<div style="width:${other}%;background:#ffb454"></div>`;
+  }catch(e){fail('CoinGecko',e)}
+}
+
+async function loadOptions(){
+  const D='https://www.deribit.com/api/v2';
+  // DVOL
+  try{
+    const now=Date.now();
+    const j=await (await fetch(`${D}/public/get_volatility_index_data?currency=BTC&start_timestamp=${now-3*86400*1000}&end_timestamp=${now}&resolution=3600`)).json();
+    const d=j.result?.data||[];
+    if(d.length){
+      const last=d[d.length-1][4]??d[d.length-1][1];
+      const prev=d[0][4]??d[0][1];
+      $('dvol').textContent=Number(last).toFixed(1);
+      const chg=last-prev;
+      $('dvolNote').innerHTML=`3日で${chg>=0?'+':''}${chg.toFixed(1)} `+
+        (chg>5?'<span class="up">IV急騰(イベント警戒)</span>':
+         chg<-5?'<span class="down">IV沈静化</span>':'安定');
+    }
+  }catch(e){fail('DVOL',e)}
+  // オプション板サマリ
+  try{
+    const j=await (await fetch(`${D}/public/get_book_summary_by_currency?currency=BTC&kind=option`)).json();
+    const rows=j.result||[];
+    let pv=0,cv=0;
+    const parsed=[];
+    for(const r of rows){
+      const parts=(r.instrument_name||'').split('-'); // BTC-27MAR26-100000-P
+      if(parts.length<4)continue;
+      const isPut=parts[3]==='P';
+      const vol=+r.volume||0;
+      if(isPut)pv+=vol;else cv+=vol;
+      parsed.push({name:r.instrument_name,isPut,vol,
+        oi:+r.open_interest||0,iv:+r.mark_iv||0,
+        strike:+parts[2]||0,exp:parts[1]});
+    }
+    const pcr=cv>0?pv/cv:0;
+    $('pcr').textContent=pcr.toFixed(2);
+    $('pcrNote').innerHTML=pcr>1.2?'<span class="up">プット優勢(ヘッジ/弱気)</span>':
+      pcr<0.7?'<span class="down">コール優勢(強気/投機)</span>':'中立圏';
+    // スキュー近似: OTM上位のIV差(出来高加重はデータ制約上、単純平均)
+    const ivPuts=parsed.filter(x=>x.isPut&&x.iv>0&&x.vol>0);
+    const ivCalls=parsed.filter(x=>!x.isPut&&x.iv>0&&x.vol>0);
+    if(ivPuts.length>5&&ivCalls.length>5){
+      const avg=a=>a.reduce((s,x)=>s+x.iv,0)/a.length;
+      const sk=avg(ivPuts)-avg(ivCalls);
+      $('skew').textContent=(sk>=0?'+':'')+sk.toFixed(1)+'pt';
+      $('skew').className='big mono '+(sk>3?'up':sk<-3?'down':'');
+    }
+    // 出来高上位(急増プロキシ)
+    parsed.sort((a,b)=>b.vol-a.vol);
+    $('optBody').innerHTML=parsed.slice(0,8).map(x=>
+      `<tr><td class="mono">${x.name}</td>
+      <td>${x.isPut?'<span class="down">PUT</span>':'<span class="up">CALL</span>'}</td>
+      <td class="mono">${x.vol.toFixed(1)}</td>
+      <td class="mono">${x.oi.toFixed(0)}</td>
+      <td class="mono">${x.iv.toFixed(0)}%</td></tr>`).join('')
+      ||'<tr><td colspan="5" class="small">データなし</td></tr>';
+  }catch(e){fail('Deribit options',e);
+    $('optBody').innerHTML='<tr><td colspan="5" class="err">取得失敗(CORS/接続)</td></tr>';}
+}
+
+async function loadAll(){
+  errs.length=0;$('errBox').textContent='';
+  await Promise.all([loadDominance(),loadOptions()]);
+  const d=new Date(Date.now()+9*3600*1000);
+  $('upd').textContent=`更新 ${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')} JST`;
+}
+$('reload').onclick=loadAll;
+loadAll();
+</script>
+</body>
+</html>

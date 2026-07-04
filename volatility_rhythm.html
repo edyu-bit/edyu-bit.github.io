@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ボラ・リズム分析 — RHYTHM & WHALE TIMING</title>
+<style>
+:root{--bg:#0a0e14;--panel:#11161f;--panel2:#161d29;--border:#1f2733;
+--text:#d8e0ea;--muted:#6b7889;--up:#ff5c5c;--down:#4d9fff;
+--warn:#ffb454;--ok:#7dd3a0;--accent:#e8c470}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);
+font-family:'Noto Sans JP','Hiragino Sans',sans-serif;font-size:14px;line-height:1.6}
+.mono{font-family:'JetBrains Mono',Consolas,monospace}
+header{padding:14px 18px;border-bottom:1px solid var(--border)}
+header h1{font-size:15px;font-weight:700}
+header h1 span{color:var(--accent)}
+header p{font-size:11px;color:var(--muted)}
+main{padding:14px;max-width:860px;margin:0 auto}
+.card{background:var(--panel);border:1px solid var(--border);
+border-radius:6px;padding:14px;margin-bottom:14px}
+.card h2{font-size:12px;color:var(--accent);letter-spacing:.06em;margin-bottom:10px}
+label{font-size:11px;color:var(--muted);display:block;margin-bottom:3px}
+input,select{background:var(--panel2);border:1px solid var(--border);
+color:var(--text);padding:8px 10px;border-radius:4px;font-size:13px;
+width:100%;font-family:inherit}
+input:focus,select:focus{outline:none;border-color:var(--accent)}
+.row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+.row>div{flex:1;min-width:110px}
+button{background:var(--accent);color:#0a0e14;border:none;padding:9px 16px;
+border-radius:4px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit}
+button.ghost{background:none;border:1px solid var(--border);color:var(--text);font-weight:500}
+button:disabled{opacity:.4}
+canvas{width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:4px}
+.small{font-size:11px;color:var(--muted)}
+.up{color:var(--up)}.warn{color:var(--warn)}.ok{color:var(--ok)}
+.stat{display:flex;gap:16px;flex-wrap:wrap;margin:8px 0}
+.stat div b{font-size:16px}
+.stat div span{font-size:11px;color:var(--muted);display:block}
+table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
+th{text-align:left;color:var(--muted);font-weight:500;font-size:11px;
+padding:5px;border-bottom:1px solid var(--border)}
+td{padding:5px;border-bottom:1px solid var(--border)}
+.err{border:1px solid var(--up);color:var(--up);background:rgba(255,92,92,.07);
+padding:8px 12px;border-radius:4px;font-size:12px;margin-top:8px;display:none}
+.err.show{display:block}
+</style>
+</head>
+<body>
+<header>
+  <h1>ボラ・リズム分析 <span>RHYTHM & WHALE TIMING</span></h1>
+  <p>全て日本時間(JST)表示 / データ: Bybit公開API(1時間足・直近約41日)</p>
+</header>
+<main>
+
+<div class="card">
+  <div class="row">
+    <div><label>銘柄</label>
+      <select id="sym">
+        <option>BTCUSDT</option><option>ETHUSDT</option><option>SOLUSDT</option>
+        <option>XRPUSDT</option><option>XPLUSDT</option><option>1000BONKUSDT</option>
+      </select></div>
+    <div><label>カスタム銘柄(任意)</label>
+      <input id="symCustom" placeholder="DOGEUSDT" class="mono"></div>
+    <div><label>大口スパイク閾値(出来高中央値の何倍)</label>
+      <input id="spikeMult" type="number" value="5" step="0.5" class="mono"></div>
+    <button id="run">分析</button>
+  </div>
+  <div class="err" id="err1"></div>
+</div>
+
+<div class="card">
+  <h2>① ボラティリティ・ヒートマップ(曜日 × JST時刻)</h2>
+  <p class="small">色が濃い=1時間足の平均レンジ((高値-安値)/始値)が大きい時間帯</p>
+  <canvas id="heat" height="260"></canvas>
+  <div class="stat" id="heatStat"></div>
+</div>
+
+<div class="card">
+  <h2>② 大口仕掛け時刻(出来高スパイクのJST分布)</h2>
+  <p class="small">出来高が中央値のN倍を超えた1時間足の発生時刻ヒストグラム。
+  薄商いを狙う大口はCEX板上ではウォレットに紐付かないため、
+  巨大出来高の痕跡から時刻の癖を逆算する方式</p>
+  <canvas id="spikeHist" height="200"></canvas>
+  <table><thead><tr><th>日時(JST)</th><th>出来高倍率</th><th>レンジ</th><th>方向</th></tr></thead>
+  <tbody id="spikeBody"></tbody></table>
+</div>
+
+<div class="card">
+  <h2>③ ウォレット活動時刻(オンチェーン)</h2>
+  <p class="small">追跡したいウォレットのトランザクション発生時刻をJSTで集計。
+  EtherscanのAPIキー(無料・etherscan.ioで発行)が必要。
+  キーはこの端末のlocalStorageのみに保存</p>
+  <div class="row" style="margin-bottom:8px">
+    <div style="flex:2"><label>ウォレットアドレス(カンマ区切りで複数可)</label>
+      <input id="wAddr" placeholder="0x..., 0x..." class="mono"></div>
+    <div><label>Etherscan APIキー</label>
+      <input id="wKey" type="password" class="mono"></div>
+    <div><label>チェーン</label>
+      <select id="wChain" class="mono">
+        <option value="1">Ethereum</option>
+        <option value="56">BSC</option>
+        <option value="42161">Arbitrum</option>
+        <option value="8453">Base</option>
+      </select></div>
+    <button class="ghost" id="wRun">追跡</button>
+  </div>
+  <canvas id="walletHist" height="200" style="display:none"></canvas>
+  <div class="err" id="err3"></div>
+</div>
+
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const JST=ts=>new Date(ts+9*3600*1000); // getUTC*で読む
+const DAYS=['日','月','火','水','木','金','土'];
+
+// ---------- データ取得 ----------
+async function fetchKlines(sym){
+  const r=await fetch(`https://api.bybit.com/v5/market/kline?category=linear&symbol=${sym}&interval=60&limit=1000`);
+  const j=await r.json();
+  const lst=j.result?.list||[];
+  if(!lst.length) throw new Error('データなし(銘柄名を確認)');
+  // Bybitは新しい順 → 古い順に
+  return lst.reverse().map(k=>({
+    ts:+k[0], o:+k[1], h:+k[2], l:+k[3], c:+k[4], v:+k[5]}));
+}
+
+// ---------- ① ヒートマップ ----------
+function drawHeatmap(kl){
+  const sum=Array.from({length:7},()=>new Array(24).fill(0));
+  const cnt=Array.from({length:7},()=>new Array(24).fill(0));
+  for(const k of kl){
+    const d=JST(k.ts), wd=d.getUTCDay(), hr=d.getUTCHours();
+    const range=k.o>0?(k.h-k.l)/k.o*100:0;
+    sum[wd][hr]+=range; cnt[wd][hr]++;
+  }
+  const avg=sum.map((row,i)=>row.map((s,j)=>cnt[i][j]?s/cnt[i][j]:0));
+  const flat=avg.flat().filter(x=>x>0);
+  const mx=Math.max(...flat), mn=Math.min(...flat);
+  const cv=$('heat'),ctx=cv.getContext('2d');
+  const W=cv.width=cv.clientWidth*2,H=cv.height=520;
+  ctx.clearRect(0,0,W,H);
+  const L=70,T=40,cw=(W-L-10)/24,ch=(H-T-40)/7;
+  ctx.font='18px monospace';
+  for(let h=0;h<24;h+=2){ctx.fillStyle='#6b7889';
+    ctx.fillText(String(h),L+h*cw+cw/2-8,T-10);}
+  for(let d=0;d<7;d++){
+    ctx.fillStyle=d===0?'#ff5c5c':d===6?'#4d9fff':'#6b7889';
+    ctx.fillText(DAYS[d],20,T+d*ch+ch/2+6);
+    for(let h=0;h<24;h++){
+      const v=avg[d][h];
+      const t=mx>mn?(v-mn)/(mx-mn):0;
+      // panel2 → accent → up のグラデーション
+      const r2=Math.round(22+t*233),g2=Math.round(29+t*(t>0.6?63:167)),b2=Math.round(41+t*(t>0.6?51:71));
+      ctx.fillStyle=v?`rgb(${r2},${g2},${b2})`:'#161d29';
+      ctx.fillRect(L+h*cw+1,T+d*ch+1,cw-2,ch-2);
+    }
+  }
+  ctx.fillStyle='#6b7889';
+  ctx.fillText('JST時刻 →',L,H-12);
+  // 上位3時間帯
+  const cells=[];
+  for(let d=0;d<7;d++)for(let h=0;h<24;h++)
+    if(cnt[d][h])cells.push({d,h,v:avg[d][h]});
+  cells.sort((a,b)=>b.v-a.v);
+  $('heatStat').innerHTML=cells.slice(0,3).map((c,i)=>
+    `<div><b class="mono up">${DAYS[c.d]} ${String(c.h).padStart(2,'0')}時</b>
+    <span>高ボラ#${i+1} 平均${c.v.toFixed(2)}%</span></div>`).join('')+
+    `<div><b class="mono down">${DAYS[cells[cells.length-1].d]} ${String(cells[cells.length-1].h).padStart(2,'0')}時</b>
+    <span>最も静か(薄商い) ${cells[cells.length-1].v.toFixed(2)}%</span></div>`;
+}
+
+// ---------- ② 大口スパイク ----------
+function drawSpikes(kl){
+  const vols=kl.map(k=>k.v).filter(v=>v>0).sort((a,b)=>a-b);
+  const med=vols[Math.floor(vols.length/2)]||1;
+  const mult=parseFloat($('spikeMult').value)||5;
+  const spikes=kl.filter(k=>k.v>=med*mult);
+  const hist=new Array(24).fill(0);
+  for(const s of spikes) hist[JST(s.ts).getUTCHours()]++;
+  const cv=$('spikeHist'),ctx=cv.getContext('2d');
+  const W=cv.width=cv.clientWidth*2,H=cv.height=400;
+  ctx.clearRect(0,0,W,H);
+  const mxh=Math.max(...hist,1),bw=(W-40)/24;
+  for(let h=0;h<24;h++){
+    const bh=hist[h]/mxh*(H-70);
+    ctx.fillStyle=hist[h]===mxh&&mxh>0?'#ff5c5c':'rgba(232,196,112,.75)';
+    ctx.fillRect(20+h*bw+2,H-40-bh,bw-4,bh);
+    ctx.fillStyle='#6b7889';ctx.font='16px monospace';
+    if(h%2===0)ctx.fillText(String(h),20+h*bw+bw/2-8,H-16);
+    if(hist[h])ctx.fillText(String(hist[h]),20+h*bw+bw/2-6,H-48-bh);
+  }
+  ctx.fillStyle='#6b7889';ctx.font='18px monospace';
+  ctx.fillText(`スパイク${spikes.length}件 / 中央値の${mult}倍超 / JST時刻別`,24,26);
+  // 直近リスト
+  const rows=spikes.slice(-12).reverse().map(s=>{
+    const d=JST(s.ts);
+    const dir=s.c>=s.o?'<span class="up">陽</span>':'<span class="down">陰</span>';
+    return `<tr><td class="mono">${String(d.getUTCMonth()+1).padStart(2,'0')}/${String(d.getUTCDate()).padStart(2,'0')}(${DAYS[d.getUTCDay()]}) ${String(d.getUTCHours()).padStart(2,'0')}時</td>
+    <td class="mono">${(s.v/med).toFixed(1)}x</td>
+    <td class="mono">${((s.h-s.l)/s.o*100).toFixed(2)}%</td><td>${dir}</td></tr>`;
+  }).join('');
+  $('spikeBody').innerHTML=rows||'<tr><td colspan="4" class="small">閾値超えなし(倍率を下げてみてください)</td></tr>';
+}
+
+$('run').onclick=async()=>{
+  $('err1').classList.remove('show');
+  $('run').disabled=true;
+  try{
+    const sym=($('symCustom').value.trim()||$('sym').value).toUpperCase();
+    const kl=await fetchKlines(sym);
+    drawHeatmap(kl); drawSpikes(kl);
+  }catch(e){
+    $('err1').textContent='取得失敗: '+e.message;
+    $('err1').classList.add('show');
+  }
+  $('run').disabled=false;
+};
+
+// ---------- ③ ウォレット追跡 ----------
+const WLS='rhythm_wallet_cfg';
+try{const c=JSON.parse(localStorage.getItem(WLS)||'{}');
+  if(c.key)$('wKey').value=c.key;
+  if(c.addr)$('wAddr').value=c.addr;}catch(e){}
+
+$('wRun').onclick=async()=>{
+  $('err3').classList.remove('show');
+  const key=$('wKey').value.trim();
+  const addrs=$('wAddr').value.split(',').map(a=>a.trim()).filter(Boolean);
+  const chain=$('wChain').value;
+  if(!key||!addrs.length){
+    $('err3').textContent='アドレスとAPIキーを入力してください';
+    $('err3').classList.add('show');return;
+  }
+  localStorage.setItem(WLS,JSON.stringify({key,addr:$('wAddr').value}));
+  $('wRun').disabled=true;
+  try{
+    const hist=new Array(24).fill(0);let total=0;
+    for(const a of addrs){
+      const u=`https://api.etherscan.io/v2/api?chainid=${chain}&module=account&action=txlist&address=${a}&page=1&offset=500&sort=desc&apikey=${key}`;
+      const j=await (await fetch(u)).json();
+      if(j.status!=='1'&&!Array.isArray(j.result))
+        throw new Error(j.message||j.result||'APIエラー');
+      for(const tx of j.result){
+        // 送信側の行動時刻のみ(受信はウォレット主の行動ではない)
+        if((tx.from||'').toLowerCase()!==a.toLowerCase())continue;
+        hist[JST(+tx.timeStamp*1000).getUTCHours()]++;total++;
+      }
+      await new Promise(r=>setTimeout(r,250)); // 無料枠レート配慮
+    }
+    const cv=$('walletHist');cv.style.display='block';
+    const ctx=cv.getContext('2d');
+    const W=cv.width=cv.clientWidth*2,H=cv.height=400;
+    ctx.clearRect(0,0,W,H);
+    const mxh=Math.max(...hist,1),bw=(W-40)/24;
+    for(let h=0;h<24;h++){
+      const bh=hist[h]/mxh*(H-70);
+      ctx.fillStyle=hist[h]===mxh&&mxh>0?'#ff5c5c':'rgba(77,159,255,.75)';
+      ctx.fillRect(20+h*bw+2,H-40-bh,bw-4,bh);
+      ctx.fillStyle='#6b7889';ctx.font='16px monospace';
+      if(h%2===0)ctx.fillText(String(h),20+h*bw+bw/2-8,H-16);
+      if(hist[h])ctx.fillText(String(hist[h]),20+h*bw+bw/2-6,H-48-bh);
+    }
+    ctx.fillStyle='#6b7889';ctx.font='18px monospace';
+    ctx.fillText(`送信tx ${total}件 / JST時刻別の活動分布`,24,26);
+  }catch(e){
+    $('err3').textContent='取得失敗: '+e.message;
+    $('err3').classList.add('show');
+  }
+  $('wRun').disabled=false;
+};
+</script>
+</body>
+</html>

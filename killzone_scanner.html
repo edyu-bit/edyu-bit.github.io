@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>キルゾーン・スキャナー — ALT WHALE CLOCK</title>
+<style>
+:root{--bg:#0a0e14;--panel:#11161f;--panel2:#161d29;--border:#1f2733;
+--text:#d8e0ea;--muted:#6b7889;--up:#ff5c5c;--down:#4d9fff;
+--warn:#ffb454;--ok:#7dd3a0;--accent:#e8c470}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);
+font-family:'Noto Sans JP','Hiragino Sans',sans-serif;font-size:14px;line-height:1.6}
+.mono{font-family:'JetBrains Mono',Consolas,monospace}
+header{padding:14px 18px;border-bottom:1px solid var(--border)}
+header h1{font-size:15px;font-weight:700}
+header h1 span{color:var(--accent)}
+header p{font-size:11px;color:var(--muted)}
+main{padding:14px;max-width:860px;margin:0 auto}
+.card{background:var(--panel);border:1px solid var(--border);
+border-radius:6px;padding:14px;margin-bottom:14px}
+.card h2{font-size:12px;color:var(--accent);letter-spacing:.06em;margin-bottom:8px}
+label{font-size:11px;color:var(--muted);display:block;margin-bottom:3px}
+input{background:var(--panel2);border:1px solid var(--border);color:var(--text);
+padding:8px 10px;border-radius:4px;font-size:13px;width:100%;font-family:inherit}
+input:focus{outline:none;border-color:var(--accent)}
+.row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+.row>div{flex:1;min-width:110px}
+button{background:var(--accent);color:#0a0e14;border:none;padding:9px 16px;
+border-radius:4px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit}
+button.ghost{background:none;border:1px solid var(--border);color:var(--text);font-weight:500}
+button:disabled{opacity:.4}
+.small{font-size:11px;color:var(--muted)}
+.up{color:var(--up)}.down{color:var(--down)}.warn{color:var(--warn)}.ok{color:var(--ok)}
+.kz{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+.kzcard{background:var(--panel2);border:1px solid var(--border);border-radius:5px;
+padding:10px 12px;min-width:150px;flex:1}
+.kzcard .hour{font-size:20px;font-weight:700}
+.kzcard .meta{font-size:11px;color:var(--muted);line-height:1.5}
+.strip{display:flex;height:16px;border:1px solid var(--border);border-radius:3px;
+overflow:hidden;margin:8px 0 4px}
+.strip div{flex:1;position:relative}
+.striplab{display:flex;font-size:9px;color:var(--muted)}
+.striplab div{flex:1;text-align:left}
+.badge{font-size:10px;padding:1px 7px;border-radius:3px;border:1px solid;margin-left:6px}
+.b-follow{color:var(--up);border-color:var(--up)}
+.b-fade{color:var(--down);border-color:var(--down)}
+.b-weak{color:var(--muted);border-color:var(--border)}
+.symh{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap}
+.symh h2{margin-bottom:0}
+.err{color:var(--up);font-size:12px;margin-top:6px}
+.todayline{border:1px solid var(--accent);background:rgba(232,196,112,.06);
+border-radius:4px;padding:8px 12px;font-size:13px;margin-top:8px}
+#prog{font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <h1>キルゾーン・スキャナー <span>ALT WHALE CLOCK</span></h1>
+  <p>アルト/ミーム専用。銘柄固有の仕掛け時刻の癖を検出(BTC同時スパイク=マクロ起因は自動除外)/ 全てJST</p>
+</header>
+<main>
+
+<div class="card">
+  <div class="row">
+    <div style="flex:3"><label>銘柄リスト(カンマ区切り・USDT無期限)</label>
+      <input id="syms" class="mono" value="XPLUSDT,1000BONKUSDT"></div>
+    <button class="ghost" id="loadHold">holdings.jsonから読込</button>
+    <button id="run">スキャン</button>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <div><label>スパイク閾値(出来高中央値×)</label>
+      <input id="volMult" type="number" value="5" step="0.5" class="mono"></div>
+    <div><label>キルゾーン認定の最低別日数</label>
+      <input id="minDays" type="number" value="3" class="mono"></div>
+    <div><label>holdings.json URL(任意)</label>
+      <input id="holdUrl" class="mono"
+        value="https://raw.githubusercontent.com/edyu-bit/level/main/holdings.json"></div>
+  </div>
+  <div id="prog"></div>
+  <div class="err" id="err" style="display:none"></div>
+</div>
+
+<div id="today"></div>
+<div id="results"></div>
+
+<div class="card">
+  <h2>読み方</h2>
+  <p class="small">
+  <b>キルゾーン</b> = 出来高スパイク(単独イベント化済・BTC連動除外済)が指定日数以上の
+  <b>別々の日</b>に同じJST時刻で発生し、かつ一様分布期待値の2倍以上の時間帯。<br>
+  <b class="up">追随型</b> = スパイク後3時間、同方向に平均して伸びる → ブレイク方向に乗る価値<br>
+  <b class="down">反転型</b> = スパイク後3時間で平均して戻す → ヒゲの逆張り(ナイフ注意)・指値回収向き<br>
+  <b class="warn">弱</b> = 後続の偏りなし → 時刻警戒(逆指値の置き直し)のみに使う<br>
+  運用: キルゾーン30分前にアラート/逆指値の点検。ゾーン内の新規チケット発行は
+  方向確認後。サンプルが薄い銘柄(上場浅)は判定自体を信用しない。
+  </p>
+</div>
+
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const JST=ts=>new Date(ts+9*3600*1000);
+const DAYS=['日','月','火','水','木','金','土'];
+
+async function klines(sym){
+  const r=await fetch(`https://api.bybit.com/v5/market/kline?category=linear&symbol=${sym}&interval=60&limit=1000`);
+  const j=await r.json();
+  const lst=j.result?.list||[];
+  if(!lst.length)throw new Error(sym+': データなし');
+  return lst.reverse().map(k=>({ts:+k[0],o:+k[1],h:+k[2],l:+k[3],c:+k[4],v:+k[5]}));
+}
+const median=a=>{const s=[...a].sort((x,y)=>x-y);return s[Math.floor(s.length/2)]||0};
+
+// スパイク足のインデックス集合
+function spikeIdx(kl,mult){
+  const med=median(kl.map(k=>k.v).filter(v=>v>0));
+  const out=new Set();
+  kl.forEach((k,i)=>{if(med>0&&k.v>=med*mult)out.add(i)});
+  return {idx:out,med};
+}
+
+// 連続スパイクを1イベントに折りたたみ(開始足を代表とする)
+function foldEvents(kl,idx){
+  const ev=[];
+  let inRun=false;
+  for(let i=0;i<kl.length;i++){
+    if(idx.has(i)){
+      if(!inRun){ev.push(i);inRun=true;}
+    }else inRun=false;
+  }
+  return ev;
+}
+
+function analyze(kl,btcSpikeTs,volMult){
+  const {idx}=spikeIdx(kl,volMult);
+  let events=foldEvents(kl,idx);
+  const total0=events.length;
+  // BTC同時スパイク除外(±1時間)
+  events=events.filter(i=>{
+    const t=kl[i].ts;
+    return !(btcSpikeTs.has(t)||btcSpikeTs.has(t-3600000)||btcSpikeTs.has(t+3600000));
+  });
+  const excluded=total0-events.length;
+  // 時刻ビン: 件数・別日集合・方向・3時間後リターン
+  const bins=Array.from({length:24},()=>({n:0,days:new Set(),bear:0,rets:[]}));
+  for(const i of events){
+    const d=JST(kl[i].ts),h=d.getUTCHours();
+    const b=bins[h];
+    b.n++;
+    b.days.add(d.getUTCFullYear()+'-'+d.getUTCMonth()+'-'+d.getUTCDate());
+    const dir=kl[i].c>=kl[i].o?1:-1;
+    if(dir<0)b.bear++;
+    if(i+3<kl.length&&kl[i].c>0){
+      // スパイク方向を正とした3時間後リターン(%)
+      b.rets.push(dir*(kl[i+3].c-kl[i].c)/kl[i].c*100);
+    }
+  }
+  const expected=events.length/24;
+  const minDays=parseInt($('minDays').value)||3;
+  const kz=[];
+  bins.forEach((b,h)=>{
+    if(b.days.size>=minDays&&b.n>=Math.max(2,expected*2)){
+      const avgRet=b.rets.length?b.rets.reduce((a,x)=>a+x,0)/b.rets.length:0;
+      kz.push({h,n:b.n,days:b.days.size,
+        bearPct:b.n?b.bear/b.n*100:0,avgRet,nRet:b.rets.length});
+    }
+  });
+  kz.sort((a,b)=>b.n-a.n);
+  return {events:events.length,excluded,bins,kz};
+}
+
+function stripHTML(bins,kz){
+  const mx=Math.max(...bins.map(b=>b.n),1);
+  const kzSet=new Set(kz.map(z=>z.h));
+  let s='<div class="strip">';
+  for(let h=0;h<24;h++){
+    const t=bins[h].n/mx;
+    const col=kzSet.has(h)?`rgba(255,92,92,${0.35+t*0.6})`:
+      t>0?`rgba(232,196,112,${0.15+t*0.6})`:'transparent';
+    s+=`<div style="background:${col}" title="${h}時: ${bins[h].n}件"></div>`;
+  }
+  s+='</div><div class="striplab">';
+  for(let h=0;h<24;h+=2)s+=`<div>${h}</div>`;
+  return s+'</div>';
+}
+
+function kzBadge(z){
+  if(z.nRet<3)return '<span class="badge b-weak">サンプル薄</span>';
+  if(z.avgRet>0.5)return '<span class="badge b-follow">追随型 +'+z.avgRet.toFixed(1)+'%/3h</span>';
+  if(z.avgRet<-0.5)return '<span class="badge b-fade">反転型 '+z.avgRet.toFixed(1)+'%/3h</span>';
+  return '<span class="badge b-weak">後続偏りなし</span>';
+}
+
+function renderSymbol(sym,a){
+  const kzHtml=a.kz.length?a.kz.map(z=>{
+    const bias=z.bearPct>=65?'<span class="down">陰'+z.bearPct.toFixed(0)+'%</span>':
+      z.bearPct<=35?'<span class="up">陽'+(100-z.bearPct).toFixed(0)+'%</span>':'方向混在';
+    return `<div class="kzcard">
+      <div class="hour mono">${String(z.h).padStart(2,'0')}時 <span style="font-size:11px;color:var(--muted)">JST</span></div>
+      <div class="meta">${z.n}イベント / ${z.days}別日<br>${bias} ${kzBadge(z)}</div>
+    </div>`;
+  }).join(''):'<p class="small">キルゾーン基準を満たす時刻なし(この銘柄に時刻の癖は確認できず)</p>';
+  return `<div class="card">
+    <div class="symh"><h2>${sym}</h2>
+    <span class="small">固有イベント${a.events}件(BTC連動${a.excluded}件を除外)</span></div>
+    ${stripHTML(a.bins,a.kz)}
+    <div class="kz">${kzHtml}</div>
+  </div>`;
+}
+
+function renderToday(results){
+  const now=JST(Date.now());
+  const nowH=now.getUTCHours();
+  const items=[];
+  for(const [sym,a] of results){
+    for(const z of a.kz){
+      let dh=z.h-nowH;if(dh<0)dh+=24;
+      items.push({sym,h:z.h,dh});
+    }
+  }
+  if(!items.length){$('today').innerHTML='';return;}
+  items.sort((a,b)=>a.dh-b.dh);
+  const next=items.slice(0,3).map(i=>
+    `<b class="mono">${i.sym.replace('USDT','')} ${String(i.h).padStart(2,'0')}時</b>`+
+    `(${i.dh===0?'<span class="up">今</span>':'あと'+i.dh+'h'})`).join(' / ');
+  $('today').innerHTML=`<div class="todayline">⏰ 次のキルゾーン: ${next}
+  — 30分前に逆指値の点検を</div>`;
+}
+
+$('loadHold').onclick=async()=>{
+  try{
+    const j=await (await fetch($('holdUrl').value)).json();
+    const hs=(j.holdings||[]).map(h=>h.toUpperCase()+'USDT');
+    if(hs.length)$('syms').value=hs.join(',');
+  }catch(e){$('err').style.display='block';
+    $('err').textContent='holdings.json読込失敗: '+e.message;}
+};
+
+$('run').onclick=async()=>{
+  $('err').style.display='none';$('results').innerHTML='';$('today').innerHTML='';
+  $('run').disabled=true;
+  const volMult=parseFloat($('volMult').value)||5;
+  try{
+    $('prog').textContent='BTC基準データ取得中…';
+    const btc=await klines('BTCUSDT');
+    const {idx:bIdx}=spikeIdx(btc,3);  // BTCは3倍で「市場が動いた」判定
+    const btcSpikeTs=new Set([...bIdx].map(i=>btc[i].ts));
+    const syms=$('syms').value.split(',').map(s=>s.trim().toUpperCase()).filter(Boolean);
+    const results=[];
+    for(const sym of syms){
+      $('prog').textContent=sym+' 分析中…';
+      try{
+        const kl=await klines(sym);
+        results.push([sym,analyze(kl,btcSpikeTs,volMult)]);
+      }catch(e){
+        $('results').innerHTML+=`<div class="card"><h2>${sym}</h2><p class="err">${e.message}</p></div>`;
+      }
+      await new Promise(r=>setTimeout(r,200));
+    }
+    renderToday(results);
+    $('results').innerHTML+=results.map(([s,a])=>renderSymbol(s,a)).join('');
+    $('prog').textContent=`完了(${results.length}銘柄 / 約41日分)`;
+  }catch(e){
+    $('err').style.display='block';$('err').textContent=e.message;
+    $('prog').textContent='';
+  }
+  $('run').disabled=false;
+};
+</script>
+</body>
+</html>
