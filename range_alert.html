@@ -72,12 +72,20 @@ background:var(--panel2);border:1px solid var(--border);color:var(--muted);margi
   <h2>レンジを追加</h2>
   <div class="card">
     <div class="row">
-      <div class="field"><label>銘柄(base)</label><input id="rAsset" class="mono" placeholder="XRP"></div>
+      <div class="field"><label>銘柄(base)</label>
+        <input id="rAsset" class="mono" placeholder="XRP" list="holdingsList">
+        <datalist id="holdingsList"></datalist></div>
       <div class="field"><label>下限</label><input id="rLower" type="number" step="any"></div>
       <div class="field"><label>上限</label><input id="rUpper" type="number" step="any"></div>
     </div>
+    <button class="ghost small" id="suggestBtn" type="button">直近30日高安を提案</button>
     <button id="addRangeBtn" type="button">追加</button>
     <div class="msg" id="addMsg"></div>
+    <p class="small" style="margin-top:10px">
+      <button class="ghost small" id="bulkAddBtn" type="button">保有銘柄を一括追加(直近30日高安)</button>
+      — holdings.jsonの銘柄のうち、まだレンジ未設定のものをまとめて追加します
+    </p>
+    <div class="msg" id="bulkMsg"></div>
   </div>
 </div>
 
@@ -203,6 +211,59 @@ async function loadWaveData(){
     waveAssets=r.text?(JSON.parse(r.text).assets||[]):[];
   }catch(e){ waveAssets=[]; fail('logs/wave/latest.json',e); }
 }
+let holdingsCache=[];
+async function loadHoldings(){
+  try{
+    const r=await ghGetFile('holdings.json');
+    holdingsCache=r.text?(JSON.parse(r.text).holdings||[]):[];
+    $('holdingsList').innerHTML=holdingsCache.map(h=>`<option value="${h}">`).join('');
+  }catch(e){ /* holdings.jsonは補助情報なので取得失敗しても致命的ではない */ }
+}
+
+async function suggestRangeFor(asset){
+  const d=await bingxDaily(asset, 30);
+  if(!d.length) return null;
+  return {lower:Math.min(...d.map(c=>c.l)), upper:Math.max(...d.map(c=>c.h))};
+}
+
+$('suggestBtn').onclick=async ()=>{
+  const asset=$('rAsset').value.trim().toUpperCase();
+  if(!asset){ showMsgIn('addMsg','銘柄を入力してください',false); return; }
+  $('suggestBtn').disabled=true;
+  try{
+    const s=await suggestRangeFor(asset);
+    if(!s){ showMsgIn('addMsg','価格データを取得できませんでした('+asset+')',false); return; }
+    $('rLower').value=s.lower; $('rUpper').value=s.upper;
+    showMsgIn('addMsg','直近30日の高安値を反映しました(必要なら調整してください)', true);
+  }catch(e){ showMsgIn('addMsg','取得失敗: '+e.message,false); }
+  $('suggestBtn').disabled=false;
+};
+
+$('bulkAddBtn').onclick=async ()=>{
+  if(!cfg.token){ showMsgIn('bulkMsg','トークンが未設定です',false); $('cfgBox').open=true; return; }
+  const existing=new Set(ranges.map(r=>r.asset));
+  const targets=holdingsCache.filter(h=>!existing.has(h));
+  if(!targets.length){ showMsgIn('bulkMsg','追加対象なし(全銘柄すでにレンジ設定済み)', true); return; }
+  $('bulkAddBtn').disabled=true;
+  showMsgIn('bulkMsg', `${targets.length}銘柄を取得中…`, true);
+  const added=[];
+  for(const asset of targets){
+    try{
+      const s=await suggestRangeFor(asset);
+      if(s) added.push({asset, lower:s.lower, upper:s.upper, created_ts:new Date().toISOString()});
+    }catch(e){ /* 個別失敗はスキップして継続 */ }
+  }
+  if(!added.length){ showMsgIn('bulkMsg','価格データを取得できませんでした',false); $('bulkAddBtn').disabled=false; return; }
+  const before=ranges.slice();
+  ranges=ranges.concat(added);
+  try{
+    rangesSha=await ghPutFile('range_watch.json', JSON.stringify({ranges},null,1)+'\n',
+      `bulk add ${added.length} ranges`, rangesSha);
+    showMsgIn('bulkMsg', `${added.length}銘柄を追加しました(${added.map(a=>a.asset).join('、')})`, true);
+    await renderRanges();
+  }catch(e){ ranges=before; showMsgIn('bulkMsg','保存失敗: '+e.message,false); }
+  $('bulkAddBtn').disabled=false;
+};
 
 const PHASE_ICON={wave2_likely_complete:'🟢',wave2_basing:'🟡',wave2_in_progress:'⚪'};
 function renderWaveDashboard(){
@@ -392,7 +453,7 @@ let tickTimer=null;
 async function loadAll(){
   errs.length=0; $('errBox').textContent='';
   $('upd').textContent='読み込み中…';
-  await Promise.all([loadRangeWatch(), loadSpotFlow(), loadWaveData()]);
+  await Promise.all([loadRangeWatch(), loadSpotFlow(), loadWaveData(), loadHoldings()]);
   renderWaveDashboard();
   await renderRanges();
   const d=new Date(Date.now()+9*3600*1000);
