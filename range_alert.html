@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>レンジ監視・波動ダッシュボード — RANGE ALERT</title>
+<style>
+:root{--bg:#0a0e14;--panel:#11161f;--panel2:#161d29;--border:#1f2733;
+--text:#d8e0ea;--muted:#6b7889;--up:#ff5c5c;--down:#4d9fff;
+--warn:#ffb454;--ok:#7dd3a0;--accent:#e8c470}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);
+font-family:'Noto Sans JP','Hiragino Sans',sans-serif;font-size:14px;line-height:1.6}
+.mono{font-family:'JetBrains Mono',Consolas,monospace}
+header{padding:14px 18px;border-bottom:1px solid var(--border);
+display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px}
+header h1{font-size:15px;font-weight:700}
+header h1 span{color:var(--accent)}
+#upd{font-size:11px;color:var(--muted)}
+main{padding:14px;max-width:900px;margin:0 auto}
+.section{margin-bottom:18px}
+.section>h2{font-size:12px;color:var(--accent);letter-spacing:.06em;margin-bottom:10px}
+.card{background:var(--panel);border:1px solid var(--border);
+border-radius:6px;padding:14px;margin-bottom:10px}
+.card h3{font-size:11px;color:var(--muted);letter-spacing:.06em;margin-bottom:6px}
+label{font-size:11px;color:var(--muted);display:block;margin-bottom:3px}
+input,select{background:var(--panel2);border:1px solid var(--border);color:var(--text);
+padding:8px 10px;border-radius:4px;font-size:13px;width:100%;font-family:inherit}
+input:focus,select:focus{outline:none;border-color:var(--accent)}
+.field{margin-bottom:10px}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row>.field{flex:1;min-width:120px}
+button{background:var(--accent);color:#0a0e14;border:none;padding:9px 16px;
+border-radius:4px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit}
+button.ghost{background:none;border:1px solid var(--border);color:var(--text);font-weight:500}
+button.small{padding:5px 10px;font-size:12px}
+.up{color:var(--up)}.down{color:var(--down)}.ok{color:var(--ok)}.warn{color:var(--warn)}
+.small{font-size:11px;color:var(--muted)}
+.msg{font-size:12px;padding:8px 12px;border-radius:4px;margin-top:10px;display:none}
+.msg.show{display:block}
+.msg.ok{border:1px solid var(--ok);color:var(--ok);background:rgba(125,211,160,.06)}
+.msg.err{border:1px solid var(--up);color:var(--up);background:rgba(255,92,92,.07)}
+details{margin-top:6px}
+summary{font-size:12px;color:var(--muted);cursor:pointer}
+.range-bar{height:10px;background:var(--panel2);border:1px solid var(--border);
+border-radius:3px;overflow:hidden;margin-top:6px;position:relative}
+.range-bar div{height:100%;background:var(--accent)}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
+.ladder-row{display:flex;justify-content:space-between;padding:5px 0;
+border-bottom:1px solid var(--border);font-size:12px}
+.ladder-row:last-child{border-bottom:none}
+.pill{display:inline-block;font-size:10px;padding:1px 6px;border-radius:8px;
+background:var(--panel2);border:1px solid var(--border);color:var(--muted);margin-left:4px}
+</style>
+</head>
+<body>
+<header>
+  <h1>レンジ監視・波動ダッシュボード <span>RANGE ALERT</span></h1>
+  <div><button class="ghost small" id="reload">更新</button> <span id="upd" class="mono small"></span></div>
+</header>
+
+<main>
+
+<div class="section">
+  <h2>月足ウェーブ判定(wave_analyzer)</h2>
+  <div class="grid" id="waveGrid">
+    <div class="card"><h3>—</h3><div class="small">下の接続設定でトークンを入力してください</div></div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>レンジを追加</h2>
+  <div class="card">
+    <div class="row">
+      <div class="field"><label>銘柄(base)</label><input id="rAsset" class="mono" placeholder="XRP"></div>
+      <div class="field"><label>下限</label><input id="rLower" type="number" step="any"></div>
+      <div class="field"><label>上限</label><input id="rUpper" type="number" step="any"></div>
+    </div>
+    <button id="addRangeBtn" type="button">追加</button>
+    <div class="msg" id="addMsg"></div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>アクティブレンジ監視(15分ごと自動記録)</h2>
+  <div id="rangesList"></div>
+</div>
+
+<div class="section">
+  <details id="cfgBox">
+    <summary>接続設定(初回のみ、level読み書きPAT)</summary>
+    <div class="card" style="margin-top:10px">
+      <div class="row">
+        <div class="field"><label>Owner</label><input id="cfgOwner" class="mono"></div>
+        <div class="field"><label>Repo</label><input id="cfgRepo" class="mono"></div>
+        <div class="field"><label>Branch</label><input id="cfgBranch" class="mono"></div>
+      </div>
+      <div class="field"><label>GitHub PAT(Contents: Read/Write、levelリポ1つのみに限定)</label>
+        <input id="cfgToken" type="password" class="mono" placeholder="github_pat_..."></div>
+      <button class="ghost" id="cfgSave" type="button">設定を保存</button>
+      <p class="small" style="margin-top:8px">
+        トークンはこの端末のlocalStorageのみに保存(送信先はGitHub APIだけ)。
+        holdings.htmlと同じ読み書きトークンを共用できます。<br>
+        CoinGlassのスポット流入データはActions側(spot_flow_scan.py)で取得済みのものを読むだけなので、
+        CoinGlassのキーはこのページには一切登場しません。
+      </p>
+    </div>
+  </details>
+</div>
+
+<p class="small" id="errBox"></p>
+
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const errs=[];
+function fail(name,e){errs.push(`${name}: ${e.message||e}`);
+  $('errBox').innerHTML='<span class="up">'+errs.join(' / ')+'</span>';}
+function chgClass(v){return v>0?'ok':v<0?'up':''}
+function chgSign(v){return v>0?'+'+v.toFixed(2):v.toFixed(2)}
+
+// ---------- 接続設定(level 読み書き) ----------
+const CFG_LS='range_alert_cfg';
+let cfg=Object.assign(
+  {owner:'edyu-bit',repo:'level',branch:'main',token:''},
+  JSON.parse(localStorage.getItem(CFG_LS)||'{}'));
+function fillCfg(){
+  $('cfgOwner').value=cfg.owner; $('cfgRepo').value=cfg.repo;
+  $('cfgBranch').value=cfg.branch; $('cfgToken').value=cfg.token;
+}
+function b64ToUtf8(b64){
+  const bin=atob(b64.replace(/\n/g,''));
+  const bytes=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+  return new TextDecoder('utf-8').decode(bytes);
+}
+function utf8ToB64(str){
+  const bytes=new TextEncoder().encode(str);
+  let bin='';
+  for(const b of bytes) bin+=String.fromCharCode(b);
+  return btoa(bin);
+}
+async function ghGetFile(path){
+  const r=await fetch(
+    `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${path}?ref=${cfg.branch}`,
+    {headers:{'Accept':'application/vnd.github+json',
+              ...(cfg.token?{'Authorization':'Bearer '+cfg.token}:{})}});
+  if(r.status===404) return {text:null, sha:null, notFound:true};
+  if(!r.ok) throw new Error('GitHub API '+r.status+' ('+path+')');
+  const j=await r.json();
+  return {text:b64ToUtf8(j.content), sha:j.sha};
+}
+async function ghPutFile(path, text, message, sha){
+  const body={message, content:utf8ToB64(text), branch:cfg.branch};
+  if(sha) body.sha=sha;
+  const r=await fetch(
+    `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${path}`,
+    {method:'PUT',
+     headers:{'Accept':'application/vnd.github+json',
+              'Authorization':'Bearer '+cfg.token},
+     body:JSON.stringify(body)});
+  if(!r.ok){const j=await r.json().catch(()=>({}));throw new Error(r.status+' '+(j.message||''));}
+  const j=await r.json();
+  return j.content.sha;
+}
+
+// ---------- BingX 公開API(クライアント直叩き、キー不要) ----------
+async function bingxPrice(base){
+  const r=await fetch(`https://open-api.bingx.com/openApi/swap/v2/quote/price?symbol=${base}-USDT`);
+  const j=await r.json();
+  return parseFloat(j?.data?.price);
+}
+async function bingxDaily(base, limit){
+  const r=await fetch(`https://open-api.bingx.com/openApi/swap/v3/quote/klines?symbol=${base}-USDT&interval=1d&limit=${limit||60}`);
+  const j=await r.json();
+  const rows=j?.data||[];
+  return rows.map(row=>Array.isArray(row)
+    ?{t:+row[0],o:+row[1],h:+row[2],l:+row[3],c:+row[4]}
+    :{t:+(row.time??row.t),o:+row.open,h:+row.high,l:+row.low,c:+row.close}
+  ).sort((a,b)=>a.t-b.t);
+}
+
+// ---------- state ----------
+let ranges=[], rangesSha=null, spotFlow={}, waveAssets=[];
+let latestLogSha=null, dailyLogSha=null, dailyLogDate=null, dailyLogText='';
+
+async function loadRangeWatch(){
+  try{
+    const r=await ghGetFile('range_watch.json');
+    if(r.notFound){ ranges=[]; rangesSha=null; }
+    else{ ranges=JSON.parse(r.text).ranges||[]; rangesSha=r.sha; }
+  }catch(e){ fail('range_watch.json',e); }
+}
+async function loadSpotFlow(){
+  try{
+    const r=await ghGetFile('spot_flow.json');
+    spotFlow=r.text?(JSON.parse(r.text).flows||{}):{};
+  }catch(e){ spotFlow={}; }
+}
+async function loadWaveData(){
+  try{
+    const r=await ghGetFile('logs/wave/latest.json');
+    waveAssets=r.text?(JSON.parse(r.text).assets||[]):[];
+  }catch(e){ waveAssets=[]; fail('logs/wave/latest.json',e); }
+}
+
+const PHASE_ICON={wave2_likely_complete:'🟢',wave2_basing:'🟡',wave2_in_progress:'⚪'};
+function renderWaveDashboard(){
+  if(!waveAssets.length){
+    $('waveGrid').innerHTML='<div class="card"><h3>—</h3><div class="small">データなし(トークン未設定 or 未実行)</div></div>';
+    return;
+  }
+  $('waveGrid').innerHTML=waveAssets.map(a=>{
+    if(a.error) return `<div class="card"><h3>${a.asset}</h3><div class="small up">取得失敗</div></div>`;
+    const sw=a.current_subwave||{};
+    const b=a.bounce_setup;
+    return `<div class="card">
+      <h3>${a.asset} <span class="pill">${PHASE_ICON[a.verdict]||''} ${a.verdict}</span></h3>
+      <div class="mono" style="font-size:20px">$${a.price}</div>
+      <div class="small">スコア${a.completion_score} / 強気カウント${a.bull_count_alive?'生存':'⚠危機'}</div>
+      <div class="small">一次突破${a.primary_break?'✅':'—'} / 本確認${a.wave3_confirmed?'✅':'—'}</div>
+      <div class="small" style="margin-top:6px">サブウェーブ: ${sw.primary_wave??'—'}波 ${sw.primary_stage??''}
+        / 中サイズ${sw.intermediate??'unclear'}(信頼度${sw.intermediate_confidence??0})</div>
+      ${b&&b.active?`<div class="small ok" style="margin-top:4px">🟢反発Setup target${b.target} inval${b.invalidation}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+// ---------- レンジ追加 ----------
+$('addRangeBtn').onclick=async ()=>{
+  if(!cfg.token){ showMsgIn('addMsg','トークンが未設定です',false); $('cfgBox').open=true; return; }
+  const asset=$('rAsset').value.trim().toUpperCase();
+  const lower=parseFloat($('rLower').value), upper=parseFloat($('rUpper').value);
+  if(!asset||!isFinite(lower)||!isFinite(upper)||lower>=upper){
+    showMsgIn('addMsg','銘柄・下限・上限を正しく入力してください(下限<上限)',false); return;
+  }
+  const range={asset, lower, upper, created_ts:new Date().toISOString()};
+  ranges.push(range);
+  try{
+    rangesSha=await ghPutFile('range_watch.json', JSON.stringify({ranges},null,1)+'\n',
+      `add range ${asset}`, rangesSha);
+    showMsgIn('addMsg','追加しました: '+asset, true);
+    $('rAsset').value=''; $('rLower').value=''; $('rUpper').value='';
+    await renderRanges();
+  }catch(e){ ranges.pop(); showMsgIn('addMsg','保存失敗: '+e.message,false); }
+};
+function showMsgIn(id,text,ok){
+  const m=$(id); m.textContent=text; m.className='msg show '+(ok?'ok':'err');
+}
+window.removeRange=async (idx)=>{
+  const removed=ranges.splice(idx,1);
+  try{
+    rangesSha=await ghPutFile('range_watch.json', JSON.stringify({ranges},null,1)+'\n',
+      'remove range', rangesSha);
+    await renderRanges();
+  }catch(e){ ranges.splice(idx,0,...removed); fail('range削除',e); }
+};
+
+// ---------- 抵抗帯ラダー ----------
+function niceRoundLevels(price, count){
+  const mag=Math.pow(10, Math.floor(Math.log10(price)));
+  const step=mag/2;
+  const out=[];
+  let lv=Math.ceil(price/step)*step;
+  for(let i=0;i<count;i++){ out.push(lv); lv+=step; }
+  return out;
+}
+function buildLadder(range, price, dailyHigh, waveTargets){
+  const H=range.upper-range.lower;
+  const cands=[];
+  cands.push({level:range.upper+H, source:'測定移動'});
+  cands.push({level:range.upper+1.618*H, source:'測定移動'});
+  [1.272,1.618,2.0,2.618].forEach(r=>cands.push({level:range.upper+r*H, source:'フィボ拡張'}));
+  if(dailyHigh) cands.push({level:dailyHigh, source:'直近スイング高値'});
+  niceRoundLevels(range.upper, 3).forEach(lv=>cands.push({level:lv, source:'ラウンドナンバー'}));
+  (waveTargets||[]).forEach(t=>cands.push({level:t.level, source:`月足Wave3(x${t.fib})`}));
+
+  const above=cands.filter(c=>c.level>price).sort((a,b)=>a.level-b.level);
+  const merged=[];
+  for(const c of above){
+    const near=merged.find(m=>Math.abs(m.level-c.level)/c.level<0.005);
+    if(near) near.sources.push(c.source);
+    else merged.push({level:c.level, sources:[c.source]});
+  }
+  return merged;
+}
+
+// ---------- レンジ描画・15分ごと記録 ----------
+async function renderRanges(){
+  if(!ranges.length){
+    $('rangesList').innerHTML='<p class="small">監視レンジなし。上のフォームから追加してください。</p>';
+    return;
+  }
+  const rows=await Promise.all(ranges.map(async (r,idx)=>{
+    let price=null, dailyHigh=null;
+    try{ price=await bingxPrice(r.asset); }catch(e){}
+    try{
+      const d=await bingxDaily(r.asset, 30);
+      if(d.length) dailyHigh=Math.max(...d.map(c=>c.h));
+    }catch(e){}
+    const flow=spotFlow[r.asset]||{};
+    const posInRange=isFinite(price)?(price-r.lower)/(r.upper-r.lower):null;
+    const durationMin=Math.round((Date.now()-new Date(r.created_ts).getTime())/60000);
+    const breakout=isFinite(price)&&price>r.upper*1.003;
+    const waveEntry=waveAssets.find(a=>a.asset===r.asset);
+    const ladder=breakout?buildLadder(r, price, dailyHigh, waveEntry?.wave3_targets):[];
+    const weak=breakout&&flow.net_flow_direction==='selling';
+    return {r, idx, price, posInRange, durationMin, flow, breakout, ladder, weak};
+  }));
+
+  $('rangesList').innerHTML=rows.map(({r,idx,price,posInRange,durationMin,flow,breakout,ladder,weak})=>{
+    const barW=posInRange!=null?Math.min(100,Math.max(0,posInRange*100)):0;
+    return `<div class="card">
+      <h3>${r.asset} <span class="small">[${r.lower} 〜 ${r.upper}]</span>
+        <button class="ghost small" style="float:right" onclick="removeRange(${idx})">削除</button></h3>
+      <div class="mono" style="font-size:18px">${price!=null?'$'+price:'—'}</div>
+      <div class="range-bar"><div style="width:${barW}%"></div></div>
+      <div class="small">レンジ内位置 ${posInRange!=null?(posInRange*100).toFixed(0)+'%':'—'}
+        / 経過${durationMin}分</div>
+      <div class="small">Taker買${flow.taker_buy?.toLocaleString()??'—'} / 売${flow.taker_sell?.toLocaleString()??'—'}
+        / ${flow.net_flow_direction??'—'}</div>
+      ${breakout?`<div class="small warn" style="margin-top:6px">
+        ⚠ 上限+0.3%ブレイク確定 ${weak?'(売り優勢=ダマシ警戒 weak_breakout)':''}</div>
+        ${ladder.map(l=>`<div class="ladder-row"><span class="mono">$${l.level.toFixed(6)}</span>
+          <span class="small">${l.sources.join('・')}</span></div>`).join('')}`
+        :''}
+    </div>`;
+  }).join('');
+}
+
+async function appendRangeLog(){
+  if(!cfg.token || !ranges.length) return;
+  const now=new Date();
+  const dateStr=now.toISOString().slice(0,10);
+  const activeRanges=[];
+  for(const r of ranges){
+    let price=null;
+    try{ price=await bingxPrice(r.asset); }catch(e){ continue; }
+    if(!isFinite(price)) continue;
+    const flow=spotFlow[r.asset]||{};
+    activeRanges.push({
+      asset:r.asset, lower:r.lower, upper:r.upper, current_price:price,
+      position_in_range:Number(((price-r.lower)/(r.upper-r.lower)).toFixed(4)),
+      duration_minutes:Math.round((now-new Date(r.created_ts))/60000),
+      spot_taker_buy:flow.taker_buy??null, spot_taker_sell:flow.taker_sell??null,
+      net_flow_direction:flow.net_flow_direction??'neutral',
+    });
+  }
+  const record={timestamp:now.toISOString(), active_ranges:activeRanges};
+  const path=`logs/range/${dateStr}.json`;
+  try{
+    if(dailyLogDate!==dateStr){
+      const existing=await ghGetFile(path);
+      dailyLogText=existing.notFound?'':existing.text;
+      dailyLogSha=existing.notFound?null:existing.sha;
+      dailyLogDate=dateStr;
+    }
+    const newText=(dailyLogText && !dailyLogText.endsWith('\n')?dailyLogText+'\n':dailyLogText)
+      + JSON.stringify(record)+'\n';
+    dailyLogSha=await ghPutFile(path, newText, 'range log append', dailyLogSha);
+    dailyLogText=newText;
+    await writeLatestRangeLog(record);
+  }catch(e){ fail('range log書き込み',e); }
+}
+
+async function writeLatestRangeLog(record){
+  const text=JSON.stringify(record,null,1)+'\n';
+  try{
+    if(latestLogSha===null){
+      const existing=await ghGetFile('logs/range/latest.json');
+      latestLogSha=existing.notFound?null:existing.sha;
+    }
+    latestLogSha=await ghPutFile('logs/range/latest.json', text, 'range latest', latestLogSha);
+  }catch(e){
+    // SHA不整合などで失敗した場合は最新SHAを取り直して1回だけ再試行
+    const existing=await ghGetFile('logs/range/latest.json');
+    latestLogSha=await ghPutFile('logs/range/latest.json', text, 'range latest',
+      existing.notFound?null:existing.sha);
+  }
+}
+
+// ---------- 設定 ----------
+$('cfgSave').onclick=async ()=>{
+  cfg={owner:$('cfgOwner').value.trim(), repo:$('cfgRepo').value.trim(),
+       branch:$('cfgBranch').value.trim()||'main', token:$('cfgToken').value.trim()};
+  localStorage.setItem(CFG_LS, JSON.stringify(cfg));
+  await loadAll();
+};
+
+// ---------- 初期化 ----------
+let tickTimer=null;
+async function loadAll(){
+  errs.length=0; $('errBox').textContent='';
+  $('upd').textContent='読み込み中…';
+  await Promise.all([loadRangeWatch(), loadSpotFlow(), loadWaveData()]);
+  renderWaveDashboard();
+  await renderRanges();
+  const d=new Date(Date.now()+9*3600*1000);
+  $('upd').textContent=`${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')} JST 更新`;
+  if(tickTimer) clearInterval(tickTimer);
+  if(cfg.token) tickTimer=setInterval(appendRangeLog, 15*60*1000);
+}
+$('reload').onclick=loadAll;
+fillCfg();
+if(!cfg.token) $('cfgBox').open=true;
+loadAll();
+</script>
+</body>
+</html>
