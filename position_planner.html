@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ポジション構築・計画 — POSITION PLANNER</title>
+<style>
+:root{--bg:#0a0e14;--panel:#11161f;--panel2:#161d29;--border:#1f2733;
+--text:#d8e0ea;--muted:#6b7889;--up:#ff5c5c;--down:#4d9fff;
+--warn:#ffb454;--ok:#7dd3a0;--accent:#e8c470}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);
+font-family:'Noto Sans JP','Hiragino Sans',sans-serif;font-size:14px;line-height:1.6}
+.mono{font-family:'JetBrains Mono',Consolas,monospace}
+header{padding:14px 18px;border-bottom:1px solid var(--border);
+display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px}
+header h1{font-size:15px;font-weight:700}
+header h1 span{color:var(--accent)}
+#upd{font-size:11px;color:var(--muted)}
+nav.tabs{display:flex;gap:6px;padding:10px 14px 0;flex-wrap:wrap;max-width:900px;margin:0 auto}
+nav.tabs button{background:var(--panel2);color:var(--muted);border:1px solid var(--border);
+font-weight:700;padding:8px 14px;border-radius:4px;font-size:12px;cursor:pointer;font-family:inherit}
+nav.tabs button.active{background:var(--accent);color:#0a0e14;border-color:var(--accent)}
+main{padding:14px;max-width:900px;margin:0 auto}
+.card{background:var(--panel);border:1px solid var(--border);
+border-radius:6px;padding:14px;margin-bottom:14px}
+.card h2{font-size:12px;color:var(--accent);letter-spacing:.06em;margin-bottom:10px}
+label{font-size:11px;color:var(--muted);display:block;margin-bottom:3px}
+input,select,textarea{background:var(--panel2);border:1px solid var(--border);color:var(--text);
+padding:8px 10px;border-radius:4px;font-size:13px;width:100%;font-family:inherit}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+textarea{resize:vertical;min-height:50px}
+.field{margin-bottom:10px}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row>.field{flex:1;min-width:130px}
+button{background:var(--accent);color:#0a0e14;border:none;padding:9px 16px;
+border-radius:4px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit}
+button.ghost{background:none;border:1px solid var(--border);color:var(--text);font-weight:500}
+button.small{padding:5px 10px;font-size:12px}
+button:disabled{opacity:.4;cursor:not-allowed}
+.up{color:var(--up)}.down{color:var(--down)}.ok{color:var(--ok)}.warn{color:var(--warn)}
+.small{font-size:11px;color:var(--muted)}
+.msg{font-size:12px;padding:8px 12px;border-radius:4px;margin-top:10px;display:none}
+.msg.show{display:block}
+.msg.ok{border:1px solid var(--ok);color:var(--ok);background:rgba(125,211,160,.06)}
+.msg.err{border:1px solid var(--up);color:var(--up);background:rgba(255,92,92,.07)}
+details{margin-top:6px}
+summary{font-size:12px;color:var(--muted);cursor:pointer}
+.hidden{display:none}
+.chip{display:inline-flex;align-items:center;gap:4px;background:var(--panel2);
+border:1px solid var(--border);border-radius:4px;padding:3px 8px;font-size:11px}
+.pos{background:var(--panel2);border:1px solid var(--border);
+border-radius:5px;padding:12px;margin-bottom:10px}
+.pos-head{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px}
+.pos-head h3{font-size:15px;font-weight:700}
+.side{font-size:11px;font-weight:700;padding:2px 8px;border-radius:3px}
+.side.LONG{background:rgba(125,211,160,.15);color:var(--ok)}
+.side.SHORT{background:rgba(255,92,92,.15);color:var(--up)}
+.pos-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));
+gap:6px;margin-top:8px}
+.pos-grid div{font-size:12px}
+.pos-grid div span{color:var(--muted);font-size:10px;display:block}
+.liq-bar{height:6px;background:var(--panel);border:1px solid var(--border);
+border-radius:3px;overflow:hidden;margin-top:4px}
+.liq-bar div{height:100%;border-radius:3px}
+.reasons{margin-top:8px;font-size:12px;color:var(--muted)}
+.actions-list{margin-top:4px;font-size:12px;color:var(--text)}
+.trigger-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+background:var(--panel);border:1px solid var(--border);border-radius:4px;
+padding:8px;margin-top:6px}
+.trigger-row.done{opacity:.5}
+.trigger-row.crossed{border-color:var(--warn)}
+.tp-row{display:flex;gap:6px;align-items:center;margin-top:6px}
+.tp-row input{flex:1}
+.hist-row{font-size:12px;padding:6px 0;border-bottom:1px solid var(--border)}
+.hist-row:last-child{border-bottom:none}
+.calc-grid{display:flex;gap:16px;flex-wrap:wrap;margin-top:8px}
+.calc-grid div span{color:var(--muted);font-size:10px;display:block}
+.calc-grid div b{font-size:18px}
+</style>
+</head>
+<body>
+<header>
+  <h1>ポジション構築・計画 <span>POSITION PLANNER</span></h1>
+  <div><button class="ghost small" id="reload">更新</button> <span id="upd" class="mono small"></span></div>
+</header>
+
+<nav class="tabs">
+  <button data-tab="build" class="active" type="button">① 構築</button>
+  <button data-tab="eval" type="button">② 評価</button>
+  <button data-tab="plan" type="button">③ 計画</button>
+  <button data-tab="act" type="button">④ 処理</button>
+</nav>
+
+<main>
+
+<section id="tab-build">
+  <div class="card">
+    <h2>シグナルから選択(任意)</h2>
+    <div class="field">
+      <label>直近シグナル(level/signals_log.jsonl)</label>
+      <select id="sigSelect"><option value="">— 手入力 —</option></select>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>ポジション条件</h2>
+    <div class="row">
+      <div class="field"><label>銘柄(base)</label><input id="bBase" class="mono" placeholder="SOL"></div>
+      <div class="field"><label>方向</label>
+        <select id="bSide"><option value="LONG">LONG</option><option value="SHORT">SHORT</option></select></div>
+      <div class="field"><label>レバレッジ</label><input id="bLev" type="number" step="1" value="5"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>エントリー</label><input id="bEntry" type="number" step="any"></div>
+      <div class="field"><label>ストップ</label><input id="bStop" type="number" step="any"></div>
+      <div class="field"><label>ターゲット</label><input id="bTarget" type="number" step="any"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>サイズ計算</h2>
+    <div class="row">
+      <div class="field"><label>口座残高(USDT)</label><input id="bEquity" type="number" step="any" value="1000"></div>
+      <div class="field"><label>リスク%(この取引で失っていい割合)</label><input id="bRisk" type="number" step="any" value="1.5"></div>
+    </div>
+    <div class="calc-grid">
+      <div><b class="mono" id="calcQty">—</b><span>数量(qty)</span></div>
+      <div><b class="mono" id="calcNotional">—</b><span>想定サイズ(USD)</span></div>
+      <div><b class="mono" id="calcMargin">—</b><span>必要証拠金(概算)</span></div>
+      <div><b class="mono" id="calcRR">—</b><span>RR(想定)</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>部分利確ライン</h2>
+    <div id="tpRows"></div>
+    <button class="ghost small" id="addTp" type="button" style="margin-top:8px">+ 追加</button>
+  </div>
+
+  <div class="card">
+    <h2>ヘッジトリガー(任意)</h2>
+    <div class="row">
+      <div class="field"><label>価格</label><input id="bHedgePrice" type="number" step="any"></div>
+      <div class="field" style="flex:2"><label>メモ</label><input id="bHedgeNote" placeholder="BTC構造崩れたら"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>メモ</h2>
+    <div class="field"><textarea id="bNotes"></textarea></div>
+    <button id="saveBtn" type="button">計画を保存</button>
+    <div class="msg" id="buildMsg"></div>
+  </div>
+</section>
+
+<section id="tab-eval" class="hidden">
+  <div class="card">
+    <div id="evalSum" style="display:flex;gap:16px;flex-wrap:wrap"></div>
+  </div>
+  <div id="evalList"></div>
+</section>
+
+<section id="tab-plan" class="hidden">
+  <div id="planList"></div>
+</section>
+
+<section id="tab-act" class="hidden">
+  <div class="card">
+    <h2>未処理のトリガー</h2>
+    <div id="pendingTriggers"></div>
+  </div>
+  <div class="card">
+    <h2>自由記録</h2>
+    <div class="row">
+      <div class="field"><label>対象の計画</label><select id="actPlanSel"></select></div>
+      <div class="field"><label>アクション種別</label>
+        <select id="actType">
+          <option value="partial_tp">部分利確</option>
+          <option value="hedge_on">ヘッジ追加</option>
+          <option value="hedge_off">ヘッジ解除</option>
+          <option value="close">クローズ</option>
+          <option value="note">メモのみ</option>
+        </select></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>価格</label><input id="actPrice" type="number" step="any"></div>
+      <div class="field"><label>割合%(部分利確の場合)</label><input id="actPct" type="number" step="any"></div>
+    </div>
+    <div class="field"><label>メモ</label><input id="actNote"></div>
+    <button id="actSaveBtn" type="button">記録する</button>
+    <div class="msg" id="actMsg"></div>
+  </div>
+  <div class="card">
+    <h2>直近アクション履歴</h2>
+    <div id="actHistory"></div>
+  </div>
+</section>
+
+<div class="card">
+  <details id="cfgBox">
+    <summary>接続設定(初回のみ)</summary>
+    <div style="margin-top:10px">
+      <h2 style="margin-top:0">level(読み取り専用)</h2>
+      <div class="row">
+        <div class="field"><label>Owner</label><input id="lvOwner" class="mono"></div>
+        <div class="field"><label>Repo</label><input id="lvRepo" class="mono"></div>
+        <div class="field"><label>Branch</label><input id="lvBranch" class="mono"></div>
+      </div>
+      <div class="field"><label>GitHub PAT(Contents: Read)</label>
+        <input id="lvToken" type="password" class="mono" placeholder="github_pat_..."></div>
+
+      <h2 style="margin-top:16px">trade-plans(読み書き)</h2>
+      <div class="row">
+        <div class="field"><label>Owner</label><input id="plOwner" class="mono"></div>
+        <div class="field"><label>Repo</label><input id="plRepo" class="mono"></div>
+        <div class="field"><label>Branch</label><input id="plBranch" class="mono"></div>
+      </div>
+      <div class="field"><label>GitHub PAT(Contents: Read/Write、trade-plansリポ1つのみに限定)</label>
+        <input id="plToken" type="password" class="mono" placeholder="github_pat_..."></div>
+
+      <button class="ghost" id="cfgSave" type="button" style="margin-top:8px">設定を保存</button>
+      <p class="small" style="margin-top:8px">
+        両トークンとも<b>この端末のlocalStorageのみ</b>に保存(送信先はGitHub APIだけ)。<br>
+        level用トークンはContents:Readのみのfine-grainedトークンで十分です(positions_gh.htmlと共用可)。<br>
+        trade-plans用トークンは<b>trade-plansリポジトリ1つ + Contents(Read/Write)のみ</b>に絞って発行してください。
+        levelリポジトリへの権限は含めないこと(漏洩時にトレードデータへ影響しないため)。
+      </p>
+    </div>
+  </details>
+</div>
+
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const LS='position_planner_cfg';
+let cfg=Object.assign(
+  {level:{owner:'edyu-bit',repo:'level',branch:'main',token:''},
+   plans:{owner:'edyu-bit',repo:'trade-plans',branch:'main',token:''}},
+  JSON.parse(localStorage.getItem(LS)||'{}'));
+
+let positions=[], reviews=[], signals=[], plans=[], plansSha=null, actionsRaw='', actionsSha=null;
+
+// ---------- base64/utf8 helpers ----------
+function b64ToUtf8(b64){
+  const bin=atob(b64.replace(/\n/g,''));
+  const bytes=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+  return new TextDecoder('utf-8').decode(bytes);
+}
+function utf8ToB64(str){
+  const bytes=new TextEncoder().encode(str);
+  let bin='';
+  for(const b of bytes) bin+=String.fromCharCode(b);
+  return btoa(bin);
+}
+
+// ---------- GitHub API ----------
+async function ghGetFile(repoCfg, path){
+  const r=await fetch(
+    `https://api.github.com/repos/${repoCfg.owner}/${repoCfg.repo}/contents/${path}?ref=${repoCfg.branch}`,
+    {headers:{'Accept':'application/vnd.github+json',
+              ...(repoCfg.token?{'Authorization':'Bearer '+repoCfg.token}:{})}});
+  if(r.status===404) return {text:null, sha:null, notFound:true};
+  if(!r.ok) throw new Error('GitHub API '+r.status+' ('+path+')');
+  const j=await r.json();
+  return {text:b64ToUtf8(j.content), sha:j.sha};
+}
+async function ghPutFile(repoCfg, path, text, message, sha){
+  const body={message, content:utf8ToB64(text), branch:repoCfg.branch};
+  if(sha) body.sha=sha;
+  const r=await fetch(
+    `https://api.github.com/repos/${repoCfg.owner}/${repoCfg.repo}/contents/${path}`,
+    {method:'PUT',
+     headers:{'Accept':'application/vnd.github+json',
+              'Authorization':'Bearer '+repoCfg.token},
+     body:JSON.stringify(body)});
+  if(!r.ok){const j=await r.json().catch(()=>({}));throw new Error(r.status+' '+(j.message||''));}
+  const j=await r.json();
+  return j.content.sha;
+}
+
+function showMsgIn(id, text, ok){
+  const m=$(id); m.textContent=text; m.className='msg show '+(ok?'ok':'err');
+}
+function pnlClass(v){return v>0?'ok':v<0?'up':''}
+function pnlSign(v){return v>0?'+'+v.toFixed(2):v.toFixed(2)}
+
+// ---------- load ----------
+async function loadLevel(){
+  if(!cfg.level.token){ positions=[]; reviews=[]; signals=[]; return; }
+  try{
+    const p=await ghGetFile(cfg.level,'positions.json');
+    positions=p.text?(JSON.parse(p.text).positions||[]):[];
+  }catch(e){ positions=[]; showMsgIn('buildMsg','positions.json読み込み失敗: '+e.message,false); }
+  try{
+    const r=await ghGetFile(cfg.level,'positions_review.json');
+    reviews=r.text?(JSON.parse(r.text).reviews||[]):[];
+  }catch(e){ reviews=[]; }
+  try{
+    const s=await ghGetFile(cfg.level,'signals_log.jsonl');
+    signals=s.text?s.text.split('\n').filter(l=>l.trim()).map(l=>JSON.parse(l)):[];
+    signals.reverse();
+  }catch(e){ signals=[]; }
+}
+
+async function loadPlans(){
+  if(!cfg.plans.token){ plans=[]; plansSha=null; actionsRaw=''; actionsSha=null; return; }
+  try{
+    const p=await ghGetFile(cfg.plans,'plans.json');
+    if(p.notFound){ plans=[]; plansSha=null; }
+    else{ plans=JSON.parse(p.text).plans||[]; plansSha=p.sha; }
+  }catch(e){ plans=[]; showMsgIn('buildMsg','plans.json読み込み失敗: '+e.message,false); }
+  try{
+    const a=await ghGetFile(cfg.plans,'actions_log.jsonl');
+    if(a.notFound){ actionsRaw=''; actionsSha=null; }
+    else{ actionsRaw=a.text; actionsSha=a.sha; }
+  }catch(e){ actionsRaw=''; actionsSha=null; }
+}
+
+// ---------- 構築タブ ----------
+function renderSignalSelect(){
+  const sel=$('sigSelect');
+  sel.innerHTML='<option value="">— 手入力 —</option>'+
+    signals.slice(0,30).map((s,i)=>
+      `<option value="${i}">${s.sym||''} ${s.direction||''} ${s.setup||''} entry${s.entry??''} (${(s.ts||'').slice(0,10)})</option>`
+    ).join('');
+}
+$('sigSelect').addEventListener('change',()=>{
+  const i=$('sigSelect').value;
+  if(i==='') return;
+  const s=signals[+i];
+  $('bBase').value=s.sym||'';
+  $('bSide').value=s.direction||'LONG';
+  $('bEntry').value=s.entry??'';
+  $('bStop').value=s.stop??'';
+  $('bTarget').value=s.target??'';
+  recalc();
+});
+
+function recalc(){
+  const entry=parseFloat($('bEntry').value), stop=parseFloat($('bStop').value),
+        target=parseFloat($('bTarget').value), equity=parseFloat($('bEquity').value),
+        risk=parseFloat($('bRisk').value), lev=parseFloat($('bLev').value)||1;
+  if(!isFinite(entry)||!isFinite(stop)||!isFinite(equity)||!isFinite(risk)||Math.abs(entry-stop)===0){
+    $('calcQty').textContent='—'; $('calcNotional').textContent='—';
+    $('calcMargin').textContent='—'; $('calcRR').textContent='—';
+    return null;
+  }
+  const riskUsd=equity*risk/100;
+  const qty=riskUsd/Math.abs(entry-stop);
+  const notional=qty*entry;
+  const margin=notional/lev;
+  $('calcQty').textContent=qty.toFixed(4);
+  $('calcNotional').textContent='$'+notional.toFixed(2);
+  $('calcMargin').textContent='$'+margin.toFixed(2);
+  let rr='—';
+  if(isFinite(target)) rr=(Math.abs(target-entry)/Math.abs(entry-stop)).toFixed(2);
+  $('calcRR').textContent=rr;
+  return {qty,notional,margin};
+}
+['bEntry','bStop','bTarget','bEquity','bRisk','bLev'].forEach(id=>$(id).addEventListener('input',recalc));
+
+function addTpRow(price,pct){
+  const div=document.createElement('div');
+  div.className='tp-row';
+  div.innerHTML=`<input type="number" step="any" class="tpPrice mono" placeholder="価格" value="${price??''}">
+    <input type="number" step="any" class="tpPct mono" placeholder="%" value="${pct??''}" style="max-width:80px">
+    <button class="ghost small tpDel" type="button">×</button>`;
+  div.querySelector('.tpDel').onclick=()=>div.remove();
+  $('tpRows').appendChild(div);
+}
+$('addTp').onclick=()=>addTpRow();
+addTpRow();
+
+function genId(base){
+  const d=new Date();
+  const p=n=>String(n).padStart(2,'0');
+  const stem=`${base}-${d.getUTCFullYear()}${p(d.getUTCMonth()+1)}${p(d.getUTCDate())}T${p(d.getUTCHours())}${p(d.getUTCMinutes())}`;
+  let id=stem, n=0;
+  while(plans.some(pl=>pl.id===id)){ n++; id=stem+'-'+n; }
+  return id;
+}
+
+async function savePlans(){
+  plansSha=await ghPutFile(cfg.plans,'plans.json', JSON.stringify({plans},null,1)+'\n','update plans', plansSha);
+}
+async function appendAction(fields){
+  const rec=Object.assign({ts:new Date().toISOString()}, fields);
+  const newText=(actionsRaw && !actionsRaw.endsWith('\n') ? actionsRaw+'\n' : actionsRaw) + JSON.stringify(rec)+'\n';
+  actionsSha=await ghPutFile(cfg.plans,'actions_log.jsonl', newText, 'log action', actionsSha);
+  actionsRaw=newText;
+}
+
+$('saveBtn').onclick=async ()=>{
+  if(!cfg.plans.token){ showMsgIn('buildMsg','trade-plans用トークンが未設定です',false); $('cfgBox').open=true; return; }
+  const base=$('bBase').value.trim().toUpperCase();
+  if(!base){ showMsgIn('buildMsg','銘柄を入力してください',false); return; }
+  const calc=recalc();
+  const tpLevels=[...document.querySelectorAll('#tpRows .tp-row')].map(row=>({
+    price: parseFloat(row.querySelector('.tpPrice').value),
+    pct_to_close: parseFloat(row.querySelector('.tpPct').value),
+    done:false
+  })).filter(t=>isFinite(t.price)&&isFinite(t.pct_to_close));
+  const hedgePrice=parseFloat($('bHedgePrice').value);
+  const sigIdx=$('sigSelect').value;
+  const plan={
+    id: genId(base),
+    base, side: $('bSide').value,
+    created_ts: new Date().toISOString(),
+    source_signal_id: sigIdx!==''? (signals[+sigIdx].id||null) : null,
+    account_equity_usdt: parseFloat($('bEquity').value)||0,
+    risk_pct: parseFloat($('bRisk').value)||0,
+    entry: parseFloat($('bEntry').value), stop: parseFloat($('bStop').value),
+    target: parseFloat($('bTarget').value), leverage: parseFloat($('bLev').value)||1,
+    computed_qty: calc?Number(calc.qty.toFixed(6)):null,
+    computed_notional_usd: calc?Number(calc.notional.toFixed(2)):null,
+    partial_tp_levels: tpLevels,
+    hedge_trigger: isFinite(hedgePrice)?{price:hedgePrice, note:$('bHedgeNote').value.trim(), done:false}:null,
+    status:'planned',
+    notes: $('bNotes').value.trim()
+  };
+  $('saveBtn').disabled=true;
+  plans.push(plan);
+  try{
+    await savePlans();
+    showMsgIn('buildMsg','計画を保存しました: '+plan.id, true);
+    renderPlanTab(); renderEvalTab(); renderActTab();
+  }catch(e){
+    plans.pop();
+    showMsgIn('buildMsg','保存失敗: '+e.message, false);
+  }
+  $('saveBtn').disabled=false;
+};
+
+// ---------- 評価タブ ----------
+function findPlanFor(base,side){
+  return plans.filter(p=>p.base===base && p.side===side && p.status!=='closed')
+    .sort((a,b)=>new Date(b.created_ts)-new Date(a.created_ts))[0];
+}
+function findReviewFor(base,side){
+  return reviews.find(r=>r.base===base && r.side===side);
+}
+function renderEvalTab(){
+  if(!positions.length){
+    $('evalSum').innerHTML='<span class="small">オープンポジションなし、またはlevel未接続</span>';
+    $('evalList').innerHTML=''; return;
+  }
+  const totalPnl=positions.reduce((s,p)=>s+(p.pnl||0),0);
+  $('evalSum').innerHTML=`
+    <div><b class="mono ${pnlClass(totalPnl)}" style="font-size:20px">${pnlSign(totalPnl)} USDT</b><div class="small">合計含み損益</div></div>
+    <div><b class="mono" style="font-size:20px">${positions.length}</b><div class="small">ポジション数</div></div>`;
+  $('evalList').innerHTML=positions.map(p=>{
+    const rv=findReviewFor(p.base,p.side);
+    const pl=findPlanFor(p.base,p.side);
+    const liq=p.liq_dist_pct||0;
+    const liqW=Math.min(100,Math.max(5,100-liq*2));
+    const liqCol=liq<10?'var(--up)':liq<25?'var(--warn)':'var(--ok)';
+    return `<div class="pos">
+      <div class="pos-head">
+        <h3 class="mono">${p.base} <span class="side ${p.side}">${p.side}</span>
+          ${pl?'<span class="chip">📝 計画あり</span>':''}</h3>
+        <span class="mono ${pnlClass(p.pnl)}" style="font-size:16px;font-weight:700">${pnlSign(p.pnl)} USDT</span>
+      </div>
+      <div class="pos-grid">
+        <div><span>ROE</span><b class="mono ${pnlClass(p.roe)}">${pnlSign(p.roe)}%</b></div>
+        <div><span>レバレッジ</span><b class="mono">${p.leverage}x</b></div>
+        <div><span>サイズ</span><b class="mono">$${(p.size_usd||0).toLocaleString()}</b></div>
+        <div><span>エントリー</span><b class="mono">${p.entry}</b></div>
+        <div><span>マーク</span><b class="mono">${p.mark}</b></div>
+        <div><span>清算距離</span><b class="mono">${liq}%</b></div>
+      </div>
+      <div class="liq-bar"><div style="width:${liqW}%;background:${liqCol}"></div></div>
+      ${rv?`<div class="reasons"><b>${rv.verdict}</b> [${rv.score}点] ${(rv.reasons||[]).join(' / ')}
+        <div class="actions-list">${(rv.actions||[]).map(a=>'→ '+a).join('<br>')}</div></div>`
+        :'<div class="small" style="margin-top:8px">査定データなし</div>'}
+    </div>`;
+  }).join('');
+}
+
+// ---------- 計画タブ ----------
+function crossed(side, mark, triggerPrice, isHedge){
+  if(!isFinite(mark)) return false;
+  if(!isHedge) return side==='LONG' ? mark>=triggerPrice : mark<=triggerPrice;
+  return side==='LONG' ? mark<=triggerPrice : mark>=triggerPrice;
+}
+function renderPlanTab(){
+  const active=plans.filter(p=>p.status!=='closed');
+  if(!active.length){ $('planList').innerHTML='<p class="small">計画なし。「構築」タブから作成してください。</p>'; return; }
+  $('planList').innerHTML=active.map(pl=>{
+    const live=positions.find(p=>p.base===pl.base && p.side===pl.side);
+    const mark=live?live.mark:NaN;
+    const tpHtml=(pl.partial_tp_levels||[]).map(t=>{
+      const hit=!t.done && crossed(pl.side, mark, t.price, false);
+      return `<div class="trigger-row ${t.done?'done':''} ${hit?'crossed':''}">
+        <span class="mono" style="flex:1">部分利確 ${t.pct_to_close}% @ ${t.price}</span>
+        ${t.done?'<span class="ok small">✓ 実行済み</span>':hit?'<span class="warn small">⚠ 到達済み・未処理</span>':'<span class="small">未到達</span>'}
+      </div>`;
+    }).join('');
+    let hedgeHtml='';
+    if(pl.hedge_trigger){
+      const t=pl.hedge_trigger;
+      const hit=!t.done && crossed(pl.side, mark, t.price, true);
+      hedgeHtml=`<div class="trigger-row ${t.done?'done':''} ${hit?'crossed':''}">
+        <span class="mono" style="flex:1">ヘッジ @ ${t.price} <span class="small">${t.note||''}</span></span>
+        ${t.done?'<span class="ok small">✓ 実行済み</span>':hit?'<span class="warn small">⚠ 到達済み・未処理</span>':'<span class="small">未到達</span>'}
+      </div>`;
+    }
+    return `<div class="pos">
+      <div class="pos-head">
+        <h3 class="mono">${pl.base} <span class="side ${pl.side}">${pl.side}</span></h3>
+        <span class="small">${live?('現在値 '+mark):'未エントリー(ライブポジなし)'}</span>
+      </div>
+      <div class="pos-grid">
+        <div><span>エントリー(計画)</span><b class="mono">${pl.entry}</b></div>
+        <div><span>ストップ</span><b class="mono">${pl.stop}</b></div>
+        <div><span>ターゲット</span><b class="mono">${pl.target}</b></div>
+        <div><span>数量</span><b class="mono">${pl.computed_qty??'—'}</b></div>
+      </div>
+      ${tpHtml}${hedgeHtml}
+      ${pl.notes?`<div class="small" style="margin-top:6px">${pl.notes}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+// ---------- 処理タブ ----------
+let pendingRows=[];
+function renderActTab(){
+  const active=plans.filter(p=>p.status!=='closed');
+  $('actPlanSel').innerHTML=active.length
+    ? active.map(p=>`<option value="${p.id}">${p.base} ${p.side} (${p.id})</option>`).join('')
+    : '<option value="">計画なし</option>';
+
+  pendingRows=[];
+  active.forEach(pl=>{
+    const live=positions.find(p=>p.base===pl.base && p.side===pl.side);
+    const mark=live?live.mark:'';
+    (pl.partial_tp_levels||[]).forEach((t,i)=>{
+      if(!t.done) pendingRows.push({plan:pl, kind:'tp', idx:i,
+        label:`${pl.base} ${pl.side} 部分利確 ${t.pct_to_close}% @ ${t.price}`, mark});
+    });
+    if(pl.hedge_trigger && !pl.hedge_trigger.done){
+      pendingRows.push({plan:pl, kind:'hedge', idx:-1,
+        label:`${pl.base} ${pl.side} ヘッジ @ ${pl.hedge_trigger.price}`, mark});
+    }
+  });
+
+  if(!pendingRows.length){
+    $('pendingTriggers').innerHTML='<p class="small">未処理のトリガーはありません</p>';
+  }else{
+    $('pendingTriggers').innerHTML=pendingRows.map((r,ri)=>`
+      <div class="trigger-row">
+        <span class="mono" style="flex:1">${r.label}</span>
+        <input type="number" step="any" class="execPrice mono" data-ri="${ri}" placeholder="実行価格" value="${r.mark}" style="max-width:120px">
+        <button class="ghost small execBtn" type="button" data-ri="${ri}">実行済みにする</button>
+      </div>`).join('');
+    document.querySelectorAll('.execBtn').forEach(btn=>{
+      btn.onclick=()=>{
+        const ri=+btn.dataset.ri;
+        const priceInput=document.querySelector(`.execPrice[data-ri="${ri}"]`);
+        execTrigger(pendingRows[ri], priceInput.value);
+      };
+    });
+  }
+  renderActHistory();
+}
+
+async function execTrigger(r, priceStr){
+  const price=parseFloat(priceStr);
+  if(!isFinite(price)){ showMsgIn('actMsg','実行価格を入力してください',false); return; }
+  const pl=r.plan;
+  try{
+    if(r.kind==='tp'){
+      pl.partial_tp_levels[r.idx].done=true;
+      await appendAction({plan_id:pl.id, base:pl.base, action:'partial_tp',
+        pct:pl.partial_tp_levels[r.idx].pct_to_close, price});
+    }else{
+      pl.hedge_trigger.done=true;
+      await appendAction({plan_id:pl.id, base:pl.base, action:'hedge_on', price});
+    }
+    await savePlans();
+    showMsgIn('actMsg','記録しました', true);
+    renderPlanTab(); renderActTab();
+  }catch(e){ showMsgIn('actMsg','失敗: '+e.message,false); }
+}
+
+$('actSaveBtn').onclick=async ()=>{
+  if(!cfg.plans.token){ showMsgIn('actMsg','trade-plans用トークンが未設定です',false); $('cfgBox').open=true; return; }
+  const planId=$('actPlanSel').value;
+  const pl=plans.find(p=>p.id===planId);
+  const type=$('actType').value;
+  const price=parseFloat($('actPrice').value);
+  const pct=parseFloat($('actPct').value);
+  const note=$('actNote').value.trim();
+  const fields={plan_id:planId||null, base:pl?pl.base:null, action:type, note};
+  if(isFinite(price)) fields.price=price;
+  if(isFinite(pct)) fields.pct=pct;
+  try{
+    await appendAction(fields);
+    if(type==='close' && pl){ pl.status='closed'; await savePlans(); }
+    showMsgIn('actMsg','記録しました', true);
+    $('actNote').value=''; $('actPrice').value=''; $('actPct').value='';
+    renderPlanTab(); renderEvalTab(); renderActTab();
+  }catch(e){ showMsgIn('actMsg','失敗: '+e.message,false); }
+};
+
+function renderActHistory(){
+  const lines=actionsRaw.split('\n').filter(l=>l.trim());
+  const recent=lines.slice(-20).reverse();
+  $('actHistory').innerHTML=recent.length? recent.map(l=>{
+    let r; try{r=JSON.parse(l);}catch(e){return '';}
+    return `<div class="hist-row"><span class="mono">${(r.ts||'').slice(0,16).replace('T',' ')}</span>
+      ${r.base||''} <b>${r.action||''}</b> ${r.price!==undefined?('@'+r.price):''} ${r.pct!==undefined?(r.pct+'%'):''}
+      ${r.note?('— '+r.note):''}</div>`;
+  }).join('') : '<p class="small">履歴なし</p>';
+}
+
+// ---------- タブ切り替え ----------
+document.querySelectorAll('nav.tabs button').forEach(btn=>{
+  btn.onclick=()=>{
+    document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    ['build','eval','plan','act'].forEach(t=>$('tab-'+t).classList.toggle('hidden', t!==btn.dataset.tab));
+  };
+});
+
+// ---------- 設定 ----------
+function fillCfg(){
+  $('lvOwner').value=cfg.level.owner; $('lvRepo').value=cfg.level.repo;
+  $('lvBranch').value=cfg.level.branch; $('lvToken').value=cfg.level.token;
+  $('plOwner').value=cfg.plans.owner; $('plRepo').value=cfg.plans.repo;
+  $('plBranch').value=cfg.plans.branch; $('plToken').value=cfg.plans.token;
+}
+$('cfgSave').onclick=async ()=>{
+  cfg={
+    level:{owner:$('lvOwner').value.trim(), repo:$('lvRepo').value.trim(),
+           branch:$('lvBranch').value.trim()||'main', token:$('lvToken').value.trim()},
+    plans:{owner:$('plOwner').value.trim(), repo:$('plRepo').value.trim(),
+           branch:$('plBranch').value.trim()||'main', token:$('plToken').value.trim()}
+  };
+  localStorage.setItem(LS, JSON.stringify(cfg));
+  await loadAll();
+};
+
+// ---------- 初期化 ----------
+async function loadAll(){
+  $('upd').textContent='読み込み中…';
+  await Promise.all([loadLevel(), loadPlans()]);
+  renderSignalSelect();
+  renderEvalTab();
+  renderPlanTab();
+  renderActTab();
+  const d=new Date(Date.now()+9*3600*1000);
+  $('upd').textContent=`${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')} JST 更新`;
+}
+$('reload').onclick=loadAll;
+fillCfg();
+if(!cfg.level.token || !cfg.plans.token) $('cfgBox').open=true;
+loadAll();
+</script>
+</body>
+</html>
