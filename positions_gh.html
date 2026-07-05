@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ポジション詳細 — POSITION DASHBOARD</title>
+<style>
+:root{--bg:#0a0e14;--panel:#11161f;--panel2:#161d29;--border:#1f2733;
+--text:#d8e0ea;--muted:#6b7889;--up:#ff5c5c;--down:#4d9fff;
+--warn:#ffb454;--ok:#7dd3a0;--accent:#e8c470}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);
+font-family:'Noto Sans JP','Hiragino Sans',sans-serif;font-size:14px;line-height:1.6}
+.mono{font-family:'JetBrains Mono',Consolas,monospace}
+header{padding:14px 18px;border-bottom:1px solid var(--border);
+display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px}
+header h1{font-size:15px;font-weight:700}
+header h1 span{color:var(--accent)}
+#upd{font-size:11px;color:var(--muted)}
+main{padding:14px;max-width:860px;margin:0 auto}
+.card{background:var(--panel);border:1px solid var(--border);
+border-radius:6px;padding:14px;margin-bottom:14px}
+.summary{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px}
+.summary div b{font-size:20px}
+.summary div span{font-size:11px;color:var(--muted);display:block}
+.pos{background:var(--panel2);border:1px solid var(--border);
+border-radius:5px;padding:12px;margin-bottom:8px}
+.pos-head{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px}
+.pos-head h3{font-size:15px;font-weight:700}
+.side{font-size:11px;font-weight:700;padding:2px 8px;border-radius:3px}
+.side.LONG{background:rgba(125,211,160,.15);color:var(--ok)}
+.side.SHORT{background:rgba(255,92,92,.15);color:var(--up)}
+.pos-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+gap:6px;margin-top:8px}
+.pos-grid div{font-size:12px}
+.pos-grid div span{color:var(--muted);font-size:10px;display:block}
+.liq-bar{height:6px;background:var(--panel);border:1px solid var(--border);
+border-radius:3px;overflow:hidden;margin-top:4px}
+.liq-bar div{height:100%;border-radius:3px}
+.up{color:var(--up)}.down{color:var(--down)}.ok{color:var(--ok)}.warn{color:var(--warn)}
+.small{font-size:11px;color:var(--muted)}
+label{font-size:11px;color:var(--muted);display:block;margin-bottom:3px}
+input{background:var(--panel2);border:1px solid var(--border);color:var(--text);
+padding:8px 10px;border-radius:4px;font-size:13px;width:100%;font-family:inherit}
+input:focus{outline:none;border-color:var(--accent)}
+button{background:var(--accent);color:#0a0e14;border:none;padding:9px 16px;
+border-radius:4px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit}
+button.ghost{background:none;border:1px solid var(--border);color:var(--text);font-weight:500}
+.row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+.row>div{flex:1;min-width:140px}
+details{margin-top:6px}
+summary{font-size:12px;color:var(--muted);cursor:pointer}
+.err{color:var(--up);font-size:12px;margin-top:6px}
+.stale{color:var(--warn);font-size:11px}
+</style>
+</head>
+<body>
+<header>
+  <h1>ポジション詳細 <span>BingX</span></h1>
+  <div><button id="reload">更新</button> <span id="upd" class="mono"></span></div>
+</header>
+<main>
+
+<div class="card">
+  <div class="summary" id="sum">
+    <div><b class="mono">—</b><span>読み込み中…</span></div>
+  </div>
+  <div id="staleNote"></div>
+</div>
+
+<div id="positions"></div>
+
+<div class="card">
+  <details id="cfgBox">
+    <summary>接続設定(初回のみ)</summary>
+    <div style="margin-top:10px">
+      <div class="row" style="margin-bottom:10px">
+        <div><label>Owner</label><input id="cfgOwner" class="mono"></div>
+        <div><label>Repo(Private)</label><input id="cfgRepo" class="mono"></div>
+        <div><label>Branch</label><input id="cfgBranch" class="mono"></div>
+      </div>
+      <div class="row">
+        <div style="flex:2"><label>GitHub PAT(Contents:Read)</label>
+          <input id="cfgToken" type="password" class="mono" placeholder="github_pat_..."></div>
+        <button class="ghost" id="cfgSave">設定を保存</button>
+      </div>
+      <p class="small" style="margin-top:8px">
+        positions.json は Private リポジトリにあるため読み取りにPATが必要。
+        holdings.html と同じトークンを使い回せます(Contents Read/Write権限)。
+        BingXキーはこのページには一切登場しません(Actions側のSecretsのみ)。
+      </p>
+    </div>
+  </details>
+</div>
+
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const LS='position_dash_cfg2';
+let cfg=Object.assign(
+  {owner:'edyu-bit',repo:'level',branch:'main',path:'positions.json',token:''},
+  JSON.parse(localStorage.getItem(LS)||'{}'));
+
+function fillCfg(){$('cfgOwner').value=cfg.owner;$('cfgRepo').value=cfg.repo;
+  $('cfgBranch').value=cfg.branch;$('cfgToken').value=cfg.token;}
+$('cfgSave').onclick=()=>{
+  cfg={owner:$('cfgOwner').value.trim(),repo:$('cfgRepo').value.trim(),
+       branch:$('cfgBranch').value.trim()||'main',path:'positions.json',
+       token:$('cfgToken').value.trim()};
+  localStorage.setItem(LS,JSON.stringify(cfg));
+  load();
+};
+
+function pnlClass(v){return v>0?'ok':v<0?'up':''}
+function pnlSign(v){return v>0?'+'+v.toFixed(2):v.toFixed(2)}
+
+function renderPositions(data){
+  const s=data.summary;
+  $('sum').innerHTML=`
+    <div><b class="mono ${pnlClass(s.total_pnl)}">${pnlSign(s.total_pnl)} USDT</b>
+      <span>合計含み損益</span></div>
+    <div><b class="mono ${pnlClass(s.total_roe)}">${pnlSign(s.total_roe)}%</b>
+      <span>合計ROE</span></div>
+    <div><b class="mono">${s.count}</b><span>ポジション数</span></div>
+    <div><b class="mono">${s.total_margin.toFixed(0)} USDT</b><span>使用証拠金</span></div>`;
+  // 鮮度チェック
+  const ageMin=(Date.now()/1000-data.ts)/60;
+  $('staleNote').innerHTML=ageMin>200
+    ?`<span class="stale">⚠ データが${(ageMin/60).toFixed(1)}時間前。次のActions実行まで最大3時間の遅延があります</span>`
+    :`<span class="small">データ鮮度: ${ageMin.toFixed(0)}分前</span>`;
+
+  $('positions').innerHTML=(data.positions||[]).map(p=>{
+    const liqW=Math.min(100,Math.max(5,100-p.liq_dist_pct*2));
+    const liqCol=p.liq_dist_pct<10?'var(--up)':p.liq_dist_pct<25?'var(--warn)':'var(--ok)';
+    const liqWarn=p.liq_dist_pct<10?'<span class="up"> ⚠</span>':'';
+    return `<div class="pos">
+      <div class="pos-head">
+        <h3 class="mono">${p.base} <span class="side ${p.side}">${p.side}</span></h3>
+        <span class="mono ${pnlClass(p.pnl)}" style="font-size:16px;font-weight:700">
+          ${pnlSign(p.pnl)} USDT</span>
+      </div>
+      <div class="pos-grid">
+        <div><span>ROE</span><b class="mono ${pnlClass(p.roe)}">${pnlSign(p.roe)}%</b></div>
+        <div><span>レバレッジ</span><b class="mono">${p.leverage}x</b></div>
+        <div><span>サイズ</span><b class="mono">$${p.size_usd.toLocaleString()}</b></div>
+        <div><span>証拠金</span><b class="mono">$${p.margin.toFixed(0)}</b></div>
+        <div><span>エントリー</span><b class="mono">${p.entry}</b></div>
+        <div><span>マーク</span><b class="mono">${p.mark}</b></div>
+        <div><span>清算価格</span><b class="mono">${p.liq_price}${liqWarn}</b></div>
+        <div><span>清算距離</span><b class="mono ${p.liq_dist_pct<10?'up':''}">${p.liq_dist_pct}%</b></div>
+      </div>
+      <div class="liq-bar"><div style="width:${liqW}%;background:${liqCol}"></div></div>
+    </div>`;
+  }).join('')||'<p class="small">オープンポジションなし</p>';
+}
+
+async function load(){
+  if(!cfg.token){$('cfgBox').open=true;
+    $('sum').innerHTML='<div><span class="err">GitHub PATを設定してください</span></div>';
+    return;}
+  try{
+    const r=await fetch(
+      `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${cfg.path}?ref=${cfg.branch}`,
+      {headers:{'Accept':'application/vnd.github+json',
+                'Authorization':'Bearer '+cfg.token}});
+    if(!r.ok) throw new Error('GitHub API '+r.status);
+    const j=await r.json();
+    const decoded=decodeURIComponent(escape(atob(j.content.replace(/\n/g,''))));
+    renderPositions(JSON.parse(decoded));
+    const d=new Date(Date.now()+9*3600*1000);
+    $('upd').textContent=`${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')} JST`;
+  }catch(e){
+    $('sum').innerHTML=`<div><span class="err">取得失敗: ${e.message}</span></div>`;
+  }
+}
+$('reload').onclick=load;
+fillCfg();
+if(!cfg.token)$('cfgBox').open=true;
+load();
+</script>
+</body>
+</html>
