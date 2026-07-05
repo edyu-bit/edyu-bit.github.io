@@ -119,6 +119,16 @@ padding:8px;margin-top:6px}
   </div>
 
   <div class="card">
+    <h2>市場データ(CoinGlass)</h2>
+    <div class="calc-grid">
+      <div><b class="mono" id="cgFunding">—</b><span>ファンディング年率</span></div>
+      <div><b class="mono" id="cgRatio">—</b><span>Long/Short比率</span></div>
+      <div><b class="mono" id="cgOi">—</b><span>OI 24h変化</span></div>
+    </div>
+    <p class="small" id="cgNote" style="margin-top:6px">銘柄を入力してください</p>
+  </div>
+
+  <div class="card">
     <h2>サイズ計算</h2>
     <div class="row">
       <div class="field"><label>口座残高(USDT)</label><input id="bEquity" type="number" step="any" value="1000"></div>
@@ -239,7 +249,7 @@ let cfg=Object.assign(
    plans:{owner:'edyu-bit',repo:'trade-plans',branch:'main',token:''}},
   JSON.parse(localStorage.getItem(LS)||'{}'));
 
-let positions=[], reviews=[], signals=[], plans=[], plansSha=null, actionsRaw='', actionsSha=null;
+let positions=[], reviews=[], signals=[], cgSignals={}, plans=[], plansSha=null, actionsRaw='', actionsSha=null;
 
 // ---------- base64/utf8 helpers ----------
 function b64ToUtf8(b64){
@@ -302,6 +312,10 @@ async function loadLevel(){
     signals=s.text?s.text.split('\n').filter(l=>l.trim()).map(l=>JSON.parse(l)):[];
     signals.reverse();
   }catch(e){ signals=[]; }
+  try{
+    const c=await ghGetFile(cfg.level,'coinglass_signals.json');
+    cgSignals=c.text?(JSON.parse(c.text).signals||{}):{};
+  }catch(e){ cgSignals={}; }
 }
 
 async function loadPlans(){
@@ -336,7 +350,29 @@ $('sigSelect').addEventListener('change',()=>{
   $('bStop').value=s.stop??'';
   $('bTarget').value=s.target??'';
   recalc();
+  renderCgCard();
 });
+
+function renderCgCard(){
+  const base=$('bBase').value.trim().toUpperCase();
+  const cg=cgSignals[base];
+  if(!cg){
+    $('cgFunding').textContent='—'; $('cgFunding').className='mono';
+    $('cgRatio').textContent='—'; $('cgRatio').className='mono';
+    $('cgOi').textContent='—'; $('cgOi').className='mono';
+    $('cgNote').textContent=base?'データなし('+base+')':'銘柄を入力してください';
+    return;
+  }
+  const f=cg.funding_apr_pct, r=cg.long_short_ratio, o=cg.oi_chg_pct_24h;
+  $('cgFunding').textContent=f!=null?(f>0?'+':'')+f.toFixed(1)+'%':'—';
+  $('cgFunding').className='mono '+(f!=null&&f>20?'up':'');
+  $('cgRatio').textContent=r!=null?r.toFixed(2):'—';
+  $('cgRatio').className='mono '+(r!=null&&r>2?'up':r!=null&&r<0.5?'down':'');
+  $('cgOi').textContent=o!=null?(o>0?'+':'')+o.toFixed(1)+'%':'—';
+  $('cgOi').className='mono '+(o!=null&&Math.abs(o)>20?'warn':'');
+  $('cgNote').textContent=cg.max_pain?('Max Pain: '+cg.max_pain):'';
+}
+$('bBase').addEventListener('input', renderCgCard);
 
 function recalc(){
   const entry=parseFloat($('bEntry').value), stop=parseFloat($('bStop').value),
@@ -506,6 +542,11 @@ function renderPlanTab(){
         ${t.done?'<span class="ok small">✓ 実行済み</span>':hit?'<span class="warn small">⚠ 到達済み・未処理</span>':'<span class="small">未到達</span>'}
       </div>`;
     }
+    const cg=cgSignals[pl.base];
+    const cgLine=cg?`<div class="small" style="margin-top:6px">CoinGlass: `+
+      `F${cg.funding_apr_pct!=null?(cg.funding_apr_pct>0?'+':'')+cg.funding_apr_pct.toFixed(1)+'%':'—'} / `+
+      `L-S比${cg.long_short_ratio!=null?cg.long_short_ratio.toFixed(2):'—'} / `+
+      `OI24h${cg.oi_chg_pct_24h!=null?(cg.oi_chg_pct_24h>0?'+':'')+cg.oi_chg_pct_24h.toFixed(1)+'%':'—'}</div>`:'';
     return `<div class="pos">
       <div class="pos-head">
         <h3 class="mono">${pl.base} <span class="side ${pl.side}">${pl.side}</span></h3>
@@ -517,7 +558,7 @@ function renderPlanTab(){
         <div><span>ターゲット</span><b class="mono">${pl.target}</b></div>
         <div><span>数量</span><b class="mono">${pl.computed_qty??'—'}</b></div>
       </div>
-      ${tpHtml}${hedgeHtml}
+      ${tpHtml}${hedgeHtml}${cgLine}
       ${pl.notes?`<div class="small" style="margin-top:6px">${pl.notes}</div>`:''}
     </div>`;
   }).join('');
@@ -647,6 +688,7 @@ async function loadAll(){
   $('upd').textContent='読み込み中…';
   await Promise.all([loadLevel(), loadPlans()]);
   renderSignalSelect();
+  renderCgCard();
   renderEvalTab();
   renderPlanTab();
   renderActTab();

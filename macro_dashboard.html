@@ -86,6 +86,10 @@ letter-spacing:.05em;text-transform:uppercase}
     <div class="card"><h3>BTCレジーム(structure_watch)</h3>
       <div class="big mono" id="btcRegime" style="font-size:18px">—</div>
       <div class="sub" id="btcRegimeNote">要トークン(下の接続設定)</div></div>
+    <div class="card"><h3>BTC OI(24h、CoinGlass)</h3>
+      <div class="big mono" id="btcOiChg">—</div><div class="sub">要トークン</div></div>
+    <div class="card"><h3>BTC Long/Short比率(CoinGlass)</h3>
+      <div class="big mono" id="btcLsRatio">—</div><div class="sub" id="btcLsRatioNote">要トークン</div></div>
   </div>
 </div>
 
@@ -121,6 +125,10 @@ letter-spacing:.05em;text-transform:uppercase}
     <div class="card"><h3>25Δスキュー近似</h3>
       <div class="big mono" id="skew">—</div>
       <div class="sub">プット遠OTMのIV − コール遠OTMのIV。プラス=下落ヘッジ需要優勢</div></div>
+    <div class="card"><h3>BTC Max Pain(CoinGlass)</h3>
+      <div class="big mono" id="btcMaxPain">—</div><div class="sub">要トークン</div></div>
+    <div class="card"><h3>ETH Max Pain(CoinGlass)</h3>
+      <div class="big mono" id="ethMaxPain">—</div><div class="sub">要トークン</div></div>
   </div>
   <div class="card" style="margin-top:12px">
     <h3>出来高急増オプション(24h上位)</h3>
@@ -279,11 +287,34 @@ async function loadMarketOverview(){
     :'<p class="small">見出しなし</p>';
 }
 
+async function loadCoinglassSignals(){
+  if(!cfg.token){
+    $('btcOiChg').textContent='—'; $('btcLsRatio').textContent='—';
+    $('btcMaxPain').textContent='—'; $('ethMaxPain').textContent='—';
+    return;
+  }
+  try{
+    const text=await ghGetFile('coinglass_signals.json');
+    const sig=(JSON.parse(text).signals)||{};
+    const btc=sig.BTC||{}, eth=sig.ETH||{};
+    if(btc.oi_chg_pct_24h!=null){
+      $('btcOiChg').textContent=chgSign(btc.oi_chg_pct_24h)+'%';
+      $('btcOiChg').className='big mono '+chgClass(btc.oi_chg_pct_24h);
+    }
+    if(btc.long_short_ratio!=null){
+      $('btcLsRatio').textContent=btc.long_short_ratio.toFixed(2);
+      $('btcLsRatioNote').textContent=btc.long_short_ratio>2?'ロング過密':btc.long_short_ratio<0.5?'ショート過密':'中立圏';
+    }
+    if(btc.max_pain!=null) $('btcMaxPain').textContent='$'+btc.max_pain.toLocaleString();
+    if(eth.max_pain!=null) $('ethMaxPain').textContent='$'+eth.max_pain.toLocaleString();
+  }catch(e){ fail('coinglass_signals.json',e); }
+}
+
 $('cfgSave').onclick=async ()=>{
   cfg={owner:$('cfgOwner').value.trim(), repo:$('cfgRepo').value.trim(),
        branch:$('cfgBranch').value.trim()||'main', token:$('cfgToken').value.trim()};
   localStorage.setItem(CFG_LS, JSON.stringify(cfg));
-  await Promise.all([loadStructurePhase(), loadMarketOverview()]);
+  await Promise.all([loadStructurePhase(), loadMarketOverview(), loadCoinglassSignals()]);
 };
 
 // ---------- 暗号資産:方向感(CoinGecko、トークン不要) ----------
@@ -406,7 +437,7 @@ async function loadOptions(){
 async function loadAll(){
   errs.length=0;$('errBox').textContent='';
   await Promise.all([loadDominance(),loadOptions(),loadCryptoDirection(),
-    loadStructurePhase(),loadMarketOverview()]);
+    loadStructurePhase(),loadMarketOverview(),loadCoinglassSignals()]);
   const d=new Date(Date.now()+9*3600*1000);
   $('upd').textContent=`更新 ${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')} JST`;
 }
