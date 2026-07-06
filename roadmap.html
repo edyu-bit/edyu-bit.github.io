@@ -75,6 +75,16 @@ summary{font-size:12px;color:var(--muted);cursor:pointer}
 
 .hist-row{font-size:12px;padding:6px 0;border-bottom:1px solid var(--border)}
 .hist-row:last-child{border-bottom:none}
+.bx-head{display:flex;gap:20px;flex-wrap:wrap;align-items:baseline}
+.bx-head .big{font-size:22px;font-weight:700}
+.bx-head div span{display:block;font-size:10px;color:var(--muted)}
+.bx-pos{display:flex;gap:10px;align-items:center;justify-content:space-between;
+font-size:12px;padding:6px 0;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.bx-pos:last-child{border-bottom:none}
+.oi-badge{font-size:10px;border:1px solid;border-radius:3px;padding:1px 6px;white-space:nowrap}
+.wk-bar{height:6px;background:var(--bg);border-radius:3px;overflow:hidden;margin-top:6px}
+.wk-bar div{height:100%;background:var(--down)}
+.wk-bar.hit div{background:var(--ok)}
 .stat-grid{display:flex;gap:20px;flex-wrap:wrap}
 .stat-grid div span{display:block;font-size:10px;color:var(--muted)}
 .stat-grid div b{font-size:18px}
@@ -98,6 +108,11 @@ table.eta th{color:var(--muted);font-weight:500}
   <div class="total mono" id="totalAmt">—</div>
   <div class="milestones" id="milestones"></div>
   <div class="next" id="nextMs"></div>
+</div>
+
+<div class="card">
+  <h2>BingX口座 <span class="small" id="bxTs"></span></h2>
+  <div id="bxBody"><p class="small">読み込み中…</p></div>
 </div>
 
 <div class="card">
@@ -194,10 +209,20 @@ table.eta th{color:var(--muted);font-weight:500}
       </div>
       <div class="field"><label>GitHub PAT(trade-plans、Contents: Read/Write)</label>
         <input id="cfgToken" type="password" class="mono" placeholder="github_pat_..."></div>
+
+      <h2 style="margin-top:16px;font-size:12px;color:var(--accent)">level(読み取り専用 — 口座残高・OIスコア表示用)</h2>
+      <div class="row">
+        <div class="field"><label>Owner</label><input id="lvOwner" class="mono"></div>
+        <div class="field"><label>Repo</label><input id="lvRepo" class="mono"></div>
+        <div class="field"><label>Branch</label><input id="lvBranch" class="mono"></div>
+      </div>
+      <div class="field"><label>GitHub PAT(level、Contents: Read)</label>
+        <input id="lvToken" type="password" class="mono" placeholder="github_pat_..."></div>
+
       <button class="ghost" id="cfgSave" type="button">設定を保存</button>
       <p class="small" style="margin-top:8px">
         トークンは<b>この端末のlocalStorageのみ</b>に保存(送信先はGitHub APIだけ)。<br>
-        position_planner.htmlで既にtrade-plans用トークンを設定済みなら、この端末では自動的に引き継ぎます。
+        position_planner.html / range_alert.html で設定済みのトークンはこの端末では自動的に引き継ぎます。
       </p>
     </div>
   </details>
@@ -207,8 +232,10 @@ table.eta th{color:var(--muted);font-weight:500}
 <script>
 const $=id=>document.getElementById(id);
 const LS='roadmap_cfg';
-let cfg=Object.assign({owner:'edyu-bit',repo:'trade-plans',branch:'main',token:''},
-  JSON.parse(localStorage.getItem(LS)||'{}'));
+const stored=JSON.parse(localStorage.getItem(LS)||'{}');
+let cfg=Object.assign({owner:'edyu-bit',repo:'trade-plans',branch:'main',token:''}, stored);
+delete cfg.level;
+let cfgL=Object.assign({owner:'edyu-bit',repo:'level',branch:'main',token:''}, stored.level||{});
 if(!cfg.token){
   // position_planner.html で既にtrade-plans用トークンを設定済みなら一度だけ引き継ぐ
   try{
@@ -216,10 +243,24 @@ if(!cfg.token){
     if(pp.plans && pp.plans.token){
       cfg={owner:pp.plans.owner||cfg.owner, repo:pp.plans.repo||cfg.repo,
            branch:pp.plans.branch||cfg.branch, token:pp.plans.token};
-      localStorage.setItem(LS, JSON.stringify(cfg));
     }
   }catch(e){}
 }
+if(!cfgL.token){
+  // 共有設定(position_planner/range_alert等が保存するlevel読み取りトークン)から引き継ぐ
+  try{
+    const s=JSON.parse(localStorage.getItem('gh_shared_cfg')||'{}');
+    if(s.levelToken){
+      cfgL.token=s.levelToken;
+      if(s.owner)cfgL.owner=s.owner;
+      if(s.branch)cfgL.branch=s.branch;
+    }
+  }catch(e){}
+}
+function persistCfg(){
+  localStorage.setItem(LS, JSON.stringify(Object.assign({}, cfg, {level:cfgL})));
+}
+persistCfg();
 
 const MILESTONES=[
   {amt:100000, label:'10万'}, {amt:1000000, label:'100万'}, {amt:3000000, label:'300万'},
@@ -246,16 +287,17 @@ function utf8ToB64(str){
 }
 
 // ---------- GitHub API ----------
-async function ghGetFile(path){
+async function ghGetRepo(rc, path){
   const r=await fetch(
-    `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${path}?ref=${cfg.branch}`,
+    `https://api.github.com/repos/${rc.owner}/${rc.repo}/contents/${path}?ref=${rc.branch}`,
     {headers:{'Accept':'application/vnd.github+json',
-              ...(cfg.token?{'Authorization':'Bearer '+cfg.token}:{})}});
+              ...(rc.token?{'Authorization':'Bearer '+rc.token}:{})}});
   if(r.status===404) return {text:null, sha:null, notFound:true};
   if(!r.ok) throw new Error('GitHub API '+r.status+' ('+path+')');
   const j=await r.json();
   return {text:b64ToUtf8(j.content), sha:j.sha};
 }
+async function ghGetFile(path){ return ghGetRepo(cfg, path); }
 async function ghPutFile(path, text, message, sha){
   const body={message, content:utf8ToB64(text), branch:cfg.branch};
   if(sha) body.sha=sha;
@@ -292,12 +334,17 @@ function defaultInput(){
   return {
     pod:{stage_no:1, balance:10000, start_date:todayStr(), updated_ts:nowIso()},
     core:{balance:0, month_start_balance:0, month_start_date:todayStr(), updated_ts:nowIso()},
-    vault:{balance:0, pending_withdrawal:0, updated_ts:nowIso()}
+    vault:{balance:0, pending_withdrawal:0, updated_ts:nowIso()},
+    weekly_target_usd:450
   };
+}
+function weeklyTarget(){
+  const t=input&&input.weekly_target_usd;
+  return (isFinite(t)&&t>0)?t:450;
 }
 async function loadAll(){
   $('upd').textContent='読み込み中…';
-  if(!cfg.token){ input=defaultInput(); inputSha=null; actionsRaw=''; actionsSha=null; renderAll(); $('cfgBox').open=true; $('upd').textContent=''; return; }
+  if(!cfg.token){ input=defaultInput(); inputSha=null; actionsRaw=''; actionsSha=null; renderAll(); loadLevel(); $('cfgBox').open=true; $('upd').textContent=''; return; }
   try{
     const p=await ghGetFile('ladder_input.json');
     input = p.notFound || !p.text ? defaultInput() : JSON.parse(p.text);
@@ -312,9 +359,116 @@ async function loadAll(){
     actionsSha = a.sha;
   }catch(e){ actionsRaw=''; actionsSha=null; }
   renderAll();
+  loadLevel();   // 口座/OIは独立に読み込み(失敗してもはしご表示に影響させない)
   const d=jstNow();
   $('upd').textContent=`${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')} JST 更新`;
 }
+
+// ---------- level(BingX口座・OIスコア) ----------
+let bx=null, oiRisk={};
+async function loadLevel(){
+  if(!cfgL.token){ bx=null; oiRisk={}; renderBx(); return; }
+  try{
+    const p=await ghGetRepo(cfgL,'positions.json');
+    bx = p.text?JSON.parse(p.text):null;
+  }catch(e){ bx=null; }
+  try{
+    const o=await ghGetRepo(cfgL,'oi_risk.json');
+    const j=o.text?JSON.parse(o.text):null;
+    oiRisk=(j&&j.symbols)||{};
+  }catch(e){ oiRisk={}; }
+  renderBx();
+}
+
+const BAND_COLOR={safe:'var(--ok)',watch:'var(--muted)',partial:'var(--warn)',danger:'var(--up)'};
+function usd(n){ return '$'+(Math.round((n||0)*100)/100).toLocaleString(); }
+function renderBx(){
+  const el=$('bxBody');
+  if(!cfgL.token){
+    el.innerHTML='<p class="small">level接続が未設定です(下の接続設定にlevel用PATを入力すると、口座残高・保有ポジション・OI折れやすさが表示されます)</p>';
+    $('bxTs').textContent=''; return;
+  }
+  if(!bx){ el.innerHTML='<p class="small">positions.json読み込み失敗/データなし</p>'; $('bxTs').textContent=''; return; }
+  const a=bx.account||{};
+  const wk=bx.week, pw=bx.prev_week;
+  const target=weeklyTarget();
+  const realized=wk?(wk.realized_usd||0):null;
+  const pct=realized!=null?Math.max(0,Math.min(100,realized/target*100)):0;
+  const hit=realized!=null&&realized>=target;
+  const rec=(pw&&pw.realized_usd>0)?Math.min(pw.realized_usd,target):0;
+  let html=`<div class="bx-head">
+    <div><b class="big mono">${a.equity!=null?usd(a.equity):'—'}</b><span>証拠金残高(equity)</span></div>
+    <div><b class="mono">${a.available!=null?usd(a.available):'—'}</b><span>利用可能</span></div>
+    <div><b class="mono ${(a.unrealized||0)>0?'ok':(a.unrealized||0)<0?'up':''}">${a.unrealized!=null?usd(a.unrealized):'—'}</b><span>含み損益</span></div>
+  </div>`;
+  if(realized!=null){
+    html+=`<div style="margin-top:12px">
+      <div class="small">今週の確定利益 <b class="mono ${realized>=0?'ok':'up'}">${usd(realized)}</b> / 目標 ${usd(target)}
+      ${hit?'<span class="ok">✓ 達成</span>':`(残り ${usd(target-realized)})`}</div>
+      <div class="wk-bar${hit?' hit':''}"><div style="width:${pct}%"></div></div>
+      ${pw?`<div class="small" style="margin-top:4px">先週の確定利益 ${usd(pw.realized_usd||0)} → 出金推奨 <b>${usd(rec)}</b>(min(確定利益, 目標)。利益ゼロなら出金なし)</div>`:''}
+    </div>`;
+  }
+  const pos=bx.positions||[];
+  if(pos.length){
+    html+='<div style="margin-top:10px">'+pos.map(p=>{
+      const o=oiRisk[p.base];
+      const badge=o?`<span class="oi-badge" style="color:${BAND_COLOR[o.band]||'var(--muted)'};border-color:${BAND_COLOR[o.band]||'var(--border)'}">折れ${Math.round(o.score)} ${o.band_label||''}</span>`:'';
+      return `<div class="bx-pos">
+        <span class="mono">${p.base} <b class="${p.side==='LONG'?'ok':'up'}">${p.side}</b></span>
+        <span class="mono small">$${Math.round(p.size_usd||0).toLocaleString()}</span>
+        <span class="mono ${p.pnl>0?'ok':p.pnl<0?'up':''}">${p.pnl>0?'+':''}${p.pnl}</span>
+        ${badge}</div>`;
+    }).join('')+'</div>';
+  }else{
+    html+='<p class="small" style="margin-top:10px">オープンポジションなし</p>';
+  }
+  html+=`<div class="row" style="margin-top:12px">
+    <button class="small" onclick="wkWithdrawBtn()" type="button">週次出金を記録</button>
+    <button class="ghost small" onclick="wkTargetBtn()" type="button">週目標変更(現: ${usd(target)})</button>
+  </div>
+  <p class="small" style="margin-top:8px">※ Pod/Core残高(円)は手動更新のまま。この口座欄はBingXのUSD残高の参考表示(3時間毎+⚡更新はposition_planner側)</p>`;
+  el.innerHTML=html;
+  $('bxTs').textContent = bx.ts?new Date(bx.ts*1000).toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})+' 時点':'';
+}
+
+window.wkWithdrawBtn=async ()=>{
+  if(!requireToken()) return;
+  const pw=bx&&bx.prev_week;
+  const target=weeklyTarget();
+  const def=(pw&&pw.realized_usd>0)?Math.min(pw.realized_usd,target):0;
+  const v=prompt(`出金額(USD)\n先週の確定利益: ${pw?('$'+(pw.realized_usd||0)):'不明'}\n推奨: $${def}(利益連動ルール)`, def||'');
+  if(v===null) return;
+  const usdAmt=parseFloat(v);
+  if(!isFinite(usdAmt)||usdAmt<0){ showMsgIn('opMsg','数値を入力してください',false); return; }
+  const j=prompt('円換算額(任意。入力するとVault残高に加算されます)','');
+  const jpy=j===null?NaN:parseFloat(j);
+  try{
+    const rec={kind:'weekly_withdrawal', amount_usd:usdAmt};
+    if(isFinite(jpy)&&jpy>0) rec.jpy=jpy;
+    await appendAction(rec);
+    if(isFinite(jpy)&&jpy>0){
+      input.vault.balance=(input.vault.balance||0)+jpy;
+      input.vault.updated_ts=nowIso();
+      await saveInput();
+    }
+    showMsgIn('opMsg','週次出金を記録しました',true);
+    renderAll(); renderBx();
+  }catch(e){ showMsgIn('opMsg','失敗: '+e.message,false); }
+};
+window.wkTargetBtn=async ()=>{
+  if(!requireToken()) return;
+  const v=prompt('週次目標(USD)。理想$450、額は絶対ではない', weeklyTarget());
+  if(v===null) return;
+  const n=parseFloat(v);
+  if(!isFinite(n)||n<=0){ showMsgIn('opMsg','正の数値を入力してください',false); return; }
+  try{
+    input.weekly_target_usd=n;
+    await saveInput();
+    showMsgIn('opMsg','週次目標を$'+n+'に更新しました',true);
+    renderBx();
+  }catch(e){ showMsgIn('opMsg','失敗: '+e.message,false); }
+};
 
 function parseActions(){
   return actionsRaw.split('\n').filter(l=>l.trim()).map(l=>{
@@ -445,6 +599,7 @@ function renderHistory(){
     if(r.kind==='harvest') return `<div class="hist-row"><span class="mono">${ts}</span> 🪜 収穫 Pod#${r.pod_stage_no} ${yen(r.pod_balance)}</div>`;
     if(r.kind==='pod_death') return `<div class="hist-row"><span class="mono">${ts}</span> 💀 Pod死 #${r.pod_stage_no} ${yen(r.balance)}</div>`;
     if(r.kind==='withdrawal') return `<div class="hist-row"><span class="mono">${ts}</span> 📤 出金 ${yen(r.amount)}</div>`;
+    if(r.kind==='weekly_withdrawal') return `<div class="hist-row"><span class="mono">${ts}</span> 📤 週次出金 $${r.amount_usd}${r.jpy?(' ('+yen(r.jpy)+')'):''}</div>`;
     if(r.kind==='vault_adjust') return `<div class="hist-row"><span class="mono">${ts}</span> Vault調整 ${yen(r.amount)}</div>`;
     return `<div class="hist-row"><span class="mono">${ts}</span> ${r.base||''} ${r.action||''} ${r.price!==undefined?('@'+r.price):''} ${r.note?('— '+r.note):''}</div>`;
   }).join('') : '<p class="small">履歴なし</p>';
@@ -594,11 +749,15 @@ $('btnTrade').onclick=async ()=>{
 function fillCfg(){
   $('cfgOwner').value=cfg.owner; $('cfgRepo').value=cfg.repo;
   $('cfgBranch').value=cfg.branch; $('cfgToken').value=cfg.token;
+  $('lvOwner').value=cfgL.owner; $('lvRepo').value=cfgL.repo;
+  $('lvBranch').value=cfgL.branch; $('lvToken').value=cfgL.token;
 }
 $('cfgSave').onclick=async ()=>{
   cfg={owner:$('cfgOwner').value.trim()||'edyu-bit', repo:$('cfgRepo').value.trim()||'trade-plans',
        branch:$('cfgBranch').value.trim()||'main', token:$('cfgToken').value.trim()};
-  localStorage.setItem(LS, JSON.stringify(cfg));
+  cfgL={owner:$('lvOwner').value.trim()||'edyu-bit', repo:$('lvRepo').value.trim()||'level',
+        branch:$('lvBranch').value.trim()||'main', token:$('lvToken').value.trim()};
+  persistCfg();
   await loadAll();
 };
 $('reload').onclick=loadAll;

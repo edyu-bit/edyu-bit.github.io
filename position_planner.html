@@ -265,6 +265,13 @@ let cfg=Object.assign(
 })();
 
 let positions=[], reviews=[], signals=[], cgSignals={}, plans=[], plansSha=null, actionsRaw='', actionsSha=null;
+let posMeta=null, oiRiskP={}, ladderInput=null;   // 口座残高/週次確定損益・OI折れやすさ・週次目標
+const OI_BAND_COLOR={safe:'var(--ok)',watch:'var(--muted)',partial:'var(--warn)',danger:'var(--up)'};
+function usdFmt(n){ return '$'+(Math.round((n||0)*100)/100).toLocaleString(); }
+function weeklyTargetP(){
+  const t=ladderInput&&ladderInput.weekly_target_usd;
+  return (isFinite(t)&&t>0)?t:450;
+}
 
 // ---------- base64/utf8 helpers ----------
 function b64ToUtf8(b64){
@@ -321,7 +328,12 @@ async function loadLevel(){
     const pj=p.text?JSON.parse(p.text):{};
     positions=pj.positions||[];
     posTs=pj.ts||0;
-  }catch(e){ positions=[]; showMsgIn('buildMsg','positions.json読み込み失敗: '+e.message,false); }
+    posMeta=pj;   // account(口座残高)/week(週次確定損益)も保持
+  }catch(e){ positions=[]; posMeta=null; showMsgIn('buildMsg','positions.json読み込み失敗: '+e.message,false); }
+  try{
+    const o=await ghGetFile(cfg.level,'oi_risk.json');
+    oiRiskP=o.text?(JSON.parse(o.text).symbols||{}):{};
+  }catch(e){ oiRiskP={}; }
   try{
     const r=await ghGetFile(cfg.level,'positions_review.json');
     reviews=r.text?(JSON.parse(r.text).reviews||[]):[];
@@ -393,6 +405,10 @@ async function loadPlans(){
     if(a.notFound){ actionsRaw=''; actionsSha=null; }
     else{ actionsRaw=a.text; actionsSha=a.sha; }
   }catch(e){ actionsRaw=''; actionsSha=null; }
+  try{
+    const li=await ghGetFile(cfg.plans,'ladder_input.json');
+    ladderInput=li.text?JSON.parse(li.text):null;   // weekly_target_usd(週次目標)
+  }catch(e){ ladderInput=null; }
 }
 
 // ---------- 構築タブ ----------
@@ -433,7 +449,9 @@ function renderCgCard(){
   $('cgRatio').className='mono '+(r!=null&&r>2?'up':r!=null&&r<0.5?'down':'');
   $('cgOi').textContent=o!=null?(o>0?'+':'')+o.toFixed(1)+'%':'—';
   $('cgOi').className='mono '+(o!=null&&Math.abs(o)>20?'warn':'');
-  $('cgNote').textContent=cg.max_pain?('Max Pain: '+cg.max_pain):'';
+  const oir=oiRiskP[base];
+  $('cgNote').textContent=(cg.max_pain?('Max Pain: '+cg.max_pain):'')
+    +(oir?((cg.max_pain?' / ':'')+`OI折れやすさ ${Math.round(oir.score)}/100 ${oir.band_label||''}(${oir.quadrant_label||''})`):'');
 }
 $('bBase').addEventListener('input', renderCgCard);
 
@@ -540,16 +558,45 @@ function findPlanFor(base,side){
 function findReviewFor(base,side){
   return reviews.find(r=>r.base===base && r.side===side);
 }
+function quotaCardHtml(){
+  const wk=posMeta&&posMeta.week;
+  if(!wk) return '';
+  const target=weeklyTargetP();
+  const realized=wk.realized_usd||0;
+  const hit=realized>=target;
+  const pct=Math.max(0,Math.min(100,realized/target*100));
+  // 利確候補: 含み益ポジを折れやすさ降順で
+  const cands=positions.filter(p=>(p.pnl||0)>0)
+    .sort((a,b)=>((oiRiskP[b.base]||{}).score||0)-((oiRiskP[a.base]||{}).score||0) || (b.pnl-a.pnl))
+    .slice(0,4);
+  const candHtml=cands.length?cands.map(p=>{
+    const o=oiRiskP[p.base];
+    return `<div class="trigger-row"><span class="mono" style="flex:1">${p.base} ${p.side} <b class="ok">+${(p.pnl||0).toFixed(1)}</b> USDT</span>
+      ${o?`<span class="small" style="color:${OI_BAND_COLOR[o.band]||'var(--muted)'}">折れ${Math.round(o.score)} ${o.band_label||''}</span>`:''}</div>`;
+  }).join(''):'<p class="small">含み益のポジションなし。無理な利確は不要(利益連動ルール)</p>';
+  return `<div class="card">
+    <h2>今週の利確クオータ(月曜JST起点)</h2>
+    <div class="small">確定利益 <b class="mono ${realized>=0?'ok':'up'}">${usdFmt(realized)}</b> / 目標 ${usdFmt(target)}
+      ${hit?'<span class="ok">✓ 達成 — 以後の利益は複利へ</span>':`(残り <b>${usdFmt(target-realized)}</b>)`}</div>
+    <div class="liq-bar" style="margin-top:6px"><div style="width:${pct}%;background:${hit?'var(--ok)':'var(--down)'}"></div></div>
+    ${!hit?`<div class="small" style="margin:8px 0 4px">利確候補(折れやすさ順 — 折れやすい銘柄の利益から確定する):</div>${candHtml}`:''}
+    ${posMeta.prev_week?`<div class="small" style="margin-top:6px">先週 ${usdFmt(posMeta.prev_week.realized_usd||0)} → 出金推奨 ${usdFmt(Math.max(0,Math.min(posMeta.prev_week.realized_usd||0,target)))}(roadmapの[週次出金]で記録)</div>`:''}
+  </div>`;
+}
+
 function renderEvalTab(){
   if(!positions.length){
     $('evalSum').innerHTML='<span class="small">オープンポジションなし、またはlevel未接続</span>';
-    $('evalList').innerHTML=''; return;
+    $('evalList').innerHTML=quotaCardHtml(); return;
   }
   const totalPnl=positions.reduce((s,p)=>s+(p.pnl||0),0);
+  const acct=posMeta&&posMeta.account;
   $('evalSum').innerHTML=`
     <div><b class="mono ${pnlClass(totalPnl)}" style="font-size:20px">${pnlSign(totalPnl)} USDT</b><div class="small">合計含み損益${liveOn?' <span class="ok">●LIVE</span>':''}</div></div>
-    <div><b class="mono" style="font-size:20px">${positions.length}</b><div class="small">ポジション数</div></div>`;
-  $('evalList').innerHTML=positions.map(p=>{
+    <div><b class="mono" style="font-size:20px">${positions.length}</b><div class="small">ポジション数</div></div>
+    ${acct&&acct.equity!=null?`<div><b class="mono" style="font-size:20px">${usdFmt(acct.equity)}</b><div class="small">口座残高(equity)</div></div>`:''}
+    ${acct&&acct.available!=null?`<div><b class="mono" style="font-size:20px">${usdFmt(acct.available)}</b><div class="small">利用可能</div></div>`:''}`;
+  $('evalList').innerHTML=quotaCardHtml()+positions.map(p=>{
     const rv=findReviewFor(p.base,p.side);
     const pl=findPlanFor(p.base,p.side);
     // liq_price=0はBingXが清算価格を返していない(クロス等) — 「清算目前」ではないので赤バーにしない
@@ -572,11 +619,26 @@ function renderEvalTab(){
         <div><span>清算距離</span><b class="mono">${hasLiq?(+liq).toFixed(1)+'%':'—'}</b></div>
       </div>
       <div class="liq-bar"><div style="width:${liqW}%;background:${liqCol}"></div></div>
+      ${oiRowHtml(p)}
       ${rv?`<div class="reasons"><b>${rv.verdict}</b> [${rv.score}点] ${(rv.reasons||[]).join(' / ')}
         <div class="actions-list">${(rv.actions||[]).map(a=>'→ '+a).join('<br>')}</div></div>`
         :'<div class="small" style="margin-top:8px">査定データなし</div>'}
     </div>`;
   }).join('');
+}
+
+// OI折れやすさ行(自ポジ側の積み上がりだけが危険信号)
+function oiRowHtml(p){
+  const o=oiRiskP[p.base];
+  if(!o) return '';
+  const mine=o.risk_side===p.side;
+  const col=mine?(OI_BAND_COLOR[o.band]||'var(--muted)'):'var(--muted)';
+  const note=o.risk_side?(mine?'← 自ポジ側の積み上がり':'(逆側の過熱=追い風)'):'';
+  const ref=(o.bands_ref||[]).find(b=>b.key===o.band&&b.rate!=null);
+  return `<div class="small" style="margin-top:8px">OI折れやすさ
+    <b style="color:${col}">${Math.round(o.score)}/100 ${o.band_label||''}</b>
+    — ${o.quadrant_label||''} ${note}
+    ${mine&&ref?`<br>過去90日: この帯の折れ率 ${ref.rate}%(${o.fold_threshold_pct}%逆行/${o.forward_h}h, n=${ref.n})`:''}</div>`;
 }
 
 // ---------- 計画タブ ----------

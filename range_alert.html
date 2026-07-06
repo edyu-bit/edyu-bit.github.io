@@ -104,6 +104,13 @@
   .dir-neutral{color:var(--ink-dim);font-weight:700}
   .flow-row .oi-chg{font-family:ui-monospace,monospace;color:var(--ink-dim)}
   .flow-row .oi-chg.dry{color:#a78bfa}
+  /* OI折れやすさ行 */
+  .oi-row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px;padding:6px 10px;border-radius:6px;font-size:10.5px;background:#070b11;color:var(--ink-dim);flex-wrap:wrap}
+  .oi-score{font-family:ui-monospace,monospace;font-weight:700}
+  .oi-safe{color:var(--green)}.oi-watch{color:var(--ink-dim)}.oi-partial{color:var(--amber)}.oi-danger{color:var(--red)}
+  .oi-ref-table{width:100%;border-collapse:collapse;font-size:10.5px;margin-top:8px}
+  .oi-ref-table th,.oi-ref-table td{padding:4px 6px;border-bottom:1px solid var(--panel-edge);text-align:left}
+  .oi-ref-table th{color:var(--ink-dim);font-weight:600;font-size:9.5px}
   /* ダマシ警戒 / 強シグナル */
   .sig-row{margin-top:8px;padding:7px 10px;border-radius:6px;font-size:11px;font-weight:700;line-height:1.5}
   .sig-row.weak{background:rgba(240,153,60,.12);color:var(--amber)}
@@ -232,6 +239,11 @@
   </div>
   <div class="alert-log-body hidden" id="logBody"><div class="log-empty">まだアラートはありません</div></div>
 </div>
+
+<details class="cfg-box" id="oiRefBox">
+  <summary>📐 OI折れやすさ — 参照一覧(数値レベルの読み方)</summary>
+  <div class="cfg-inner" id="oiRefBody"><p class="cfg-note">GitHub連携後にoi_risk.jsonから読み込みます</p></div>
+</details>
 
 <details class="cfg-box" id="cfgBox">
   <summary id="cfgSummary">⚙ GitHub連携(現物フロー・OI・保有銘柄・レンジ同期)</summary>
@@ -424,6 +436,16 @@ async function loadCoinglass(){
     if(r.text){const j=JSON.parse(r.text); cgSignals=j.signals||{}; cgTs=j.ts||null;}
   }catch(e){ /* OIは補助データなので失敗しても致命的ではない */ }
 }
+// OI折れやすさ(oi_risk_scan.pyが3時間毎に計算)
+let oiRisk={}, oiMeta=null;
+async function loadOiRisk(){
+  if(!cfg.token) return;
+  try{
+    const r=await ghGetFile('oi_risk.json');
+    if(r.text){const j=JSON.parse(r.text); oiRisk=j.symbols||{}; oiMeta=j.meta||null;}
+    renderOiRef();
+  }catch(e){ /* 補助データ */ }
+}
 // 実保有銘柄の取得: positions.json(BingX実ポジション)優先 → 失敗時のみholdings.json
 async function refreshHeldSymbols(){
   if(!cfg.token) return false;
@@ -536,8 +558,9 @@ function updateGhStatus(){
 async function initGh(){
   if(!cfg.token){ document.getElementById("cfgBox").open=true; renderHeldStatus(); return; }
   await fetchAllTickers().catch(()=>{});
-  await Promise.all([refreshHeldSymbols(), loadSpotFlow(), loadCoinglass(), loadRangeWatch()]);
+  await Promise.all([refreshHeldSymbols(), loadSpotFlow(), loadCoinglass(), loadOiRisk(), loadRangeWatch()]);
   updateGhStatus();
+  checkOiBands();
   render();
 }
 
@@ -1139,6 +1162,80 @@ function flowRowHtml(w){
   return `<div class="flow-row"><span>${left}</span>${right}</div>`;
 }
 
+// ―― OI折れやすさ行(スコア・象限・その帯の実測折れ率) ――
+function oiRowHtml(w){
+  const o=oiRisk[w.sym];
+  if(!o) return "";
+  const cls="oi-"+(o.band||"safe");
+  const held=heldSyms.includes(w.sym);
+  const ref=(o.bands_ref||[]).find(b=>b.key===o.band&&b.rate!=null);
+  const heldTxt=held&&o.risk_side?` <b class="${cls}">${o.risk_side}保有は${o.band==="danger"?"利確/ヘッジ":o.band==="partial"?"部分利確":"監視"}</b>`:"";
+  return `<div class="oi-row">
+    <span>折れやすさ <span class="oi-score ${cls}">${Math.round(o.score)}/100</span>
+      <span class="${cls}">${o.band_label||""}</span> — ${o.quadrant_label||""}${heldTxt}</span>
+    <span class="${cls}">${ref?`この帯の折れ率 ${ref.rate}%(n=${ref.n})`:""}</span>
+  </div>`;
+}
+
+// ―― 保有銘柄のバンド昇格アラート(partial以上に上がった時だけ1回) ――
+const OI_SEV={safe:0,watch:1,partial:2,danger:3};
+function checkOiBands(){
+  let st={};
+  try{ st=JSON.parse(localStorage.getItem("oi_band_alerted")||"{}"); }catch(e){}
+  for(const sym of heldSyms){
+    const o=oiRisk[sym];
+    if(!o) continue;
+    const sev=OI_SEV[o.band]||0;
+    const prev=st[sym]!=null?(OI_SEV[st[sym]]||0):-1;
+    if(sev>=2 && sev>prev){
+      const act=sev>=3?"利確/ヘッジ":"部分利確";
+      const msg=(sev>=3?"🎯 ":"✂️ ")+sym+" 折れやすさ "+Math.round(o.score)+"/100("+(o.band_label||"")+") — "
+        +(o.quadrant_label||"")+(o.risk_side?("。"+o.risk_side+"保有は"+act+"検討"):"");
+      showToast(msg, sev>=3?"warn2":"", 9000);
+      addLog(msg);
+      notify(msg);
+      if(soundOn) beep(sev>=3?820:700);
+    }
+    if(sev<2) delete st[sym]; else st[sym]=o.band;
+  }
+  try{ localStorage.setItem("oi_band_alerted", JSON.stringify(st)); }catch(e){}
+}
+
+// ―― 参照一覧(バンドの意味 + 銘柄別の実測折れ率) ――
+function renderOiRef(){
+  const el=document.getElementById("oiRefBody");
+  if(!el) return;
+  const bands=(oiMeta&&oiMeta.bands)||[];
+  const syms=Object.keys(oiRisk);
+  if(!bands.length&&!syms.length){
+    el.innerHTML='<p class="cfg-note">まだデータがありません(3時間毎のスキャン後に表示されます)</p>';
+    return;
+  }
+  const bandRows=bands.map(b=>
+    `<tr><td class="oi-${b.key}" style="font-weight:700">${b.lo}-${Math.min(b.hi,100)}</td><td>${b.label}</td><td>${b.advice}</td></tr>`).join("");
+  const symRows=syms.map(s=>{
+    const o=oiRisk[s];
+    const cells=(o.bands_ref||[]).map(b=>
+      `<td>${b.rate!=null?(b.rate+"% <span style='color:var(--ink-faint)'>n="+b.n+"</span>"):"—"}</td>`).join("");
+    return `<tr><td><b>${s}</b>${o.held?' <span style="color:var(--gold)">●保有</span>':''}</td><td>${o.fold_threshold_pct}%</td>${cells}</tr>`;
+  }).join("");
+  el.innerHTML=`
+    <table class="oi-ref-table">
+      <tr><th>スコア帯</th><th>意味</th><th>行動</th></tr>${bandRows}
+    </table>
+    <table class="oi-ref-table">
+      <tr><th>銘柄</th><th>折れ閾値</th><th>0-25</th><th>25-50</th><th>50-75</th><th>75-100</th></tr>${symRows}
+    </table>
+    <div class="cfg-note" style="margin-top:8px">
+      折れ率 = 過去90日、OI積み上がり中にそのスコア帯へ入った後、48h以内に閾値%以上逆行した割合。
+      nが小さい帯(目安n&lt;10)の率は信用しないこと。
+      スコアは「自分のポジと同じ側が積み上がっている時」だけ危険信号
+      (逆側の過熱は踏み上げ燃料=追い風)。
+      構成: 40×OI水位(90日percentile) + 30×OI24h増加 + 30×価格乖離。詳細はlevelリポの
+      OIリスク指標_参照一覧.md
+    </div>`;
+}
+
 // ―― 描画 ――
 function render(){
   const list=document.getElementById("list");
@@ -1231,6 +1328,7 @@ function render(){
         </div>
       </div>
       ${flowRowHtml(w)}
+      ${oiRowHtml(w)}
       ${sigHtml}
       ${retestHtml}
       ${ladderHtml}
@@ -1604,7 +1702,7 @@ loadHeldCache();renderHeldStatus();   // キャッシュがあれば開いた瞬
 initGh();
 poll();
 setInterval(poll,POLL_MS);setInterval(tick,1000);tick();
-setInterval(async()=>{ if(cfg.token){ await Promise.all([loadSpotFlow(),loadCoinglass()]); updateGhStatus(); render(); } }, GH_REFRESH_MS);
+setInterval(async()=>{ if(cfg.token){ await Promise.all([loadSpotFlow(),loadCoinglass(),loadOiRisk()]); updateGhStatus(); checkOiBands(); render(); } }, GH_REFRESH_MS);
 if(typeof Notification!=="undefined"&&Notification.permission==="granted"){document.getElementById("notifyBtn").textContent="🔔 通知 ON";document.getElementById("notifyBtn").classList.add("on")}
 </script>
 </body>
