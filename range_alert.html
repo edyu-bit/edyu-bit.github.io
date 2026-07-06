@@ -888,23 +888,29 @@ async function poll(){
   try{
     await fetchAllTickers();
     for(const w of watches){
-      const t=tickerCache[w.inst];
-      if(t){
-        const last=parseFloat(t.last||0);
-        const chg=parseFloat(t.change||0)*100;
-        if(last>0){w.price=last;w.change=chg;checkAlert(w)}
-      }else if(Date.now()-(w._bxTs||0)>20000){
-        w._bxTs=Date.now();
-        bingxTicker(w.sym).then(r=>{
-          if(r&&r.price>0){w.price=r.price;w.change=r.chg;checkAlert(w);save();render()}
-        }).catch(()=>{});
-      }
+      try{   // 1銘柄の異常でポーリング全体を止めない
+        const t=tickerCache[w.inst];
+        if(t){
+          const last=parseFloat(t.last||0);
+          const chg=parseFloat(t.change||0)*100;
+          if(last>0){w.price=last;w.change=chg;checkAlert(w)}
+        }else if(Date.now()-(w._bxTs||0)>20000){
+          w._bxTs=Date.now();
+          bingxTicker(w.sym).then(r=>{
+            if(r&&r.price>0){w.price=r.price;w.change=r.chg;checkAlert(w);save();render()}
+          }).catch(()=>{});
+        }
+      }catch(e){console.error('watch error:',w.sym,e);}
     }
     save();render();setFeed("ライブ",true);
     for(const w of watches){
       if(detailOpen[w.id]) maybeRefreshDetail(w);
     }
-  }catch(e){setFeed("接続エラー",false)}
+  }catch(e){
+    console.error('poll error:',e);
+    // 何が起きたか分かるようエラー内容を短く表示(従来は「接続エラー」固定で原因が追えなかった)
+    setFeed("エラー: "+String((e&&e.message)||e).slice(0,40),false);
+  }
 }
 async function maybeRefreshDetail(w){
   const tf = detailTf[w.id]||"4h";
@@ -985,7 +991,7 @@ function fireAlert(w,state){
   else if(state==="breakout-down") msg="📉 "+w.sym+" レンジ下抜け!サポート: $"+(w.nextS?fmt(w.nextS):"計算中");
   else if(state==="retest-up") msg="⭐ "+w.sym+" 旧レジ $"+fmt(w.hi)+" をリテスト中 "+(w._retestCount||1)+"回目(保てば継続!)";
   else if(state==="retest-down") msg="⭐ "+w.sym+" 旧サポ $"+fmt(w.lo)+" をリテスト中 "+(w._retestCount||1)+"回目(戻れば継続!)";
-  if(typeof Notification!=="undefined"&&Notification.permission==="granted") new Notification("レンジ監視",{body:msg});
+  notify(msg);
   if(soundOn) beep(state.startsWith("breakout")?1100:state.startsWith("retest")?990:state.startsWith("hit")?880:560);
   showToast(msg);
   addLog(msg);
@@ -1002,7 +1008,7 @@ function fireSubAlert(w,sub){
     const oiTxt=og&&og.oi_chg_pct_24h!=null?("OI"+og.oi_chg_pct_24h+"%"):"OI減少";
     msg="💪 "+w.sym+" 強シグナル!上抜け+現物買い流入+"+oiTxt+"(現物主導)";
   }
-  if(typeof Notification!=="undefined"&&Notification.permission==="granted") new Notification("レンジ監視",{body:msg});
+  notify(msg);
   if(soundOn) beep(sub==="strong"?1320:740);
   showToast(msg, sub==="strong"?"strong":"warn2", sub==="strong"?10000:8000);
   addLog(msg);
@@ -1088,6 +1094,15 @@ function speakText(text){
   }catch(e){}
 }
 
+// 通知の安全ラッパー: モバイルChrome等はページ内 new Notification() が例外を投げる(Illegal constructor)
+// → 例外を握りつぶさないとアラート処理全体が毎回死んで「接続エラー」が出続ける
+function notify(msg){
+  try{
+    if(typeof Notification!=="undefined"&&Notification.permission==="granted")
+      new Notification("レンジ監視",{body:msg});
+  }catch(e){}
+}
+
 let audioCtx;
 function beep(freq){try{audioCtx=audioCtx||new(window.AudioContext||window.webkitAudioContext)();const o=audioCtx.createOscillator();const g=audioCtx.createGain();o.connect(g);g.connect(audioCtx.destination);o.frequency.value=freq;o.type="sine";g.gain.setValueAtTime(.18,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.4);o.start();o.stop(audioCtx.currentTime+.4)}catch(e){}}
 
@@ -1150,8 +1165,9 @@ function render(){
       else if(s==="retest-up"){cardCls="retest";markerCls="hi";stateCls="retest";stateTxt="⭐ 旧レジをリテスト中 "+(w._retestCount||1)+"回目";starActive=true}
       else if(s==="retest-down"){cardCls="retest";markerCls="lo";stateCls="retest";stateTxt="⭐ 旧サポをリテスト中 "+(w._retestCount||1)+"回目";starActive=true}
     }
-    const chCls=w.change>=0?"up":"down";
-    const chTxt=(w.change>=0?"+":"")+w.change.toFixed(2)+"%";
+    const chg=isFinite(w.change)?w.change:0;   // 旧データ/取得失敗時のundefined対策
+    const chCls=chg>=0?"up":"down";
+    const chTxt=(chg>=0?"+":"")+chg.toFixed(2)+"%";
     // 抵抗帯/支持帯ラダー(ブレイク中のみ展開)
     let ladderHtml="";
     if(w._broke==="up"&&w.price!=null){
