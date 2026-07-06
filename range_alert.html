@@ -3,138 +3,353 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>レンジ監視・波動ダッシュボード — RANGE ALERT</title>
+<title>レンジ監視レーダー</title>
 <style>
-:root{--bg:#0a0e14;--panel:#11161f;--panel2:#161d29;--border:#1f2733;
---text:#d8e0ea;--muted:#6b7889;--up:#ff5c5c;--down:#4d9fff;
---warn:#ffb454;--ok:#7dd3a0;--accent:#e8c470}
-*{margin:0;padding:0;box-sizing:border-box}
-body{background:var(--bg);color:var(--text);
-font-family:'Noto Sans JP','Hiragino Sans',sans-serif;font-size:14px;line-height:1.6}
-.mono{font-family:'JetBrains Mono',Consolas,monospace}
-header{padding:14px 18px;border-bottom:1px solid var(--border);
-display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px}
-header h1{font-size:15px;font-weight:700}
-header h1 span{color:var(--accent)}
-#upd{font-size:11px;color:var(--muted)}
-main{padding:14px;max-width:900px;margin:0 auto}
-.section{margin-bottom:18px}
-.section>h2{font-size:12px;color:var(--accent);letter-spacing:.06em;margin-bottom:10px}
-.card{background:var(--panel);border:1px solid var(--border);
-border-radius:6px;padding:14px;margin-bottom:10px}
-.card h3{font-size:11px;color:var(--muted);letter-spacing:.06em;margin-bottom:6px}
-label{font-size:11px;color:var(--muted);display:block;margin-bottom:3px}
-input,select{background:var(--panel2);border:1px solid var(--border);color:var(--text);
-padding:8px 10px;border-radius:4px;font-size:13px;width:100%;font-family:inherit}
-input:focus,select:focus{outline:none;border-color:var(--accent)}
-.field{margin-bottom:10px}
-.row{display:flex;gap:8px;flex-wrap:wrap}
-.row>.field{flex:1;min-width:120px}
-button{background:var(--accent);color:#0a0e14;border:none;padding:9px 16px;
-border-radius:4px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit}
-button.ghost{background:none;border:1px solid var(--border);color:var(--text);font-weight:500}
-button.small{padding:5px 10px;font-size:12px}
-.up{color:var(--up)}.down{color:var(--down)}.ok{color:var(--ok)}.warn{color:var(--warn)}
-.small{font-size:11px;color:var(--muted)}
-.msg{font-size:12px;padding:8px 12px;border-radius:4px;margin-top:10px;display:none}
-.msg.show{display:block}
-.msg.ok{border:1px solid var(--ok);color:var(--ok);background:rgba(125,211,160,.06)}
-.msg.err{border:1px solid var(--up);color:var(--up);background:rgba(255,92,92,.07)}
-details{margin-top:6px}
-summary{font-size:12px;color:var(--muted);cursor:pointer}
-.range-bar{height:10px;background:var(--panel2);border:1px solid var(--border);
-border-radius:3px;overflow:hidden;margin-top:6px;position:relative}
-.range-bar div{height:100%;background:var(--accent)}
-.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
-.ladder-row{display:flex;justify-content:space-between;padding:5px 0;
-border-bottom:1px solid var(--border);font-size:12px}
-.ladder-row:last-child{border-bottom:none}
-.pill{display:inline-block;font-size:10px;padding:1px 6px;border-radius:8px;
-background:var(--panel2);border:1px solid var(--border);color:var(--muted);margin-left:4px}
+  :root {
+    --bg: #0a0e14; --panel: #111722; --panel-edge: #1c2533;
+    --ink: #d4dce6; --ink-dim: #5a6b80; --ink-faint: #36424f;
+    --gold: #e8c84a; --green: #3ecb78; --red: #e8504a; --amber: #f0993c;
+    --track: #1a222e; --blue: #5b9cf6;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font-family:-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;padding:16px 14px 60px;max-width:560px;margin:0 auto}
+  header{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px}
+  h1{font-size:17px;font-weight:700}
+  h1 .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);margin-right:7px;vertical-align:middle;animation:pulse 2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  .sub{font-size:10px;color:var(--ink-dim);letter-spacing:.14em;text-transform:uppercase}
+  .status-line{font-size:11px;color:var(--ink-dim);margin:10px 0 16px;display:flex;justify-content:space-between}
+  .status-line .live{color:var(--green)}
+  .add-card{background:var(--panel);border:1px solid var(--panel-edge);border-radius:10px;padding:14px;margin-bottom:18px}
+  .add-card .label{font-size:9px;color:var(--ink-dim);letter-spacing:.14em;text-transform:uppercase;margin-bottom:9px}
+  .row{display:flex;gap:8px;margin-bottom:8px}.row:last-child{margin-bottom:0}
+  input{flex:1;background:#070b11;border:1px solid var(--panel-edge);border-radius:6px;color:var(--ink);font-size:15px;padding:10px 11px;outline:none;font-family:inherit;min-width:0}
+  input::placeholder{color:var(--ink-faint)}input:focus{border-color:#2f4666}
+  button{cursor:pointer;font-family:inherit;border:none;border-radius:6px;font-weight:700}
+  .btn-add{background:var(--gold);color:#1a1505;padding:10px 18px;font-size:14px;white-space:nowrap}
+  .btn-add:active{transform:translateY(1px)}
+  .hint{font-size:10px;color:var(--ink-faint);margin-top:8px;line-height:1.5}
+  .presets{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+  .preset-btn{background:#070b11;border:1px solid var(--panel-edge);color:var(--ink-dim);font-size:12px;padding:6px 11px;border-radius:5px;font-weight:600}
+  .preset-btn:active{background:var(--panel-edge);color:var(--ink)}
+  .preset-btn.loading{opacity:.5;pointer-events:none}
+  .watch{background:var(--panel);border:1px solid var(--panel-edge);border-radius:10px;padding:14px;margin-bottom:11px;transition:border-color .3s}
+  .watch.alert-low{border-color:var(--green);box-shadow:0 0 0 1px var(--green) inset}
+  .watch.alert-high{border-color:var(--red);box-shadow:0 0 0 1px var(--red) inset}
+  .watch.near{border-color:var(--amber)}
+  .watch.breakout-up{border-color:var(--blue);box-shadow:0 0 0 1px var(--blue) inset}
+  .watch.breakout-down{border-color:#a855f7;box-shadow:0 0 0 1px #a855f7 inset}
+  .w-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:3px}
+  .w-sym{font-size:15px;font-weight:700;letter-spacing:.03em}
+  .w-price{font-family:ui-monospace,monospace;font-size:17px;font-weight:700}
+  .w-meta{display:flex;justify-content:space-between;font-size:10px;color:var(--ink-dim);margin-bottom:13px}
+  .w-change.up{color:var(--green)}.w-change.down{color:var(--red)}
+  .bar-wrap{position:relative;margin:0 2px}
+  .bar{height:6px;background:var(--track);border-radius:3px;position:relative;overflow:visible}
+  .bar-fill{position:absolute;top:0;left:0;bottom:0;background:linear-gradient(90deg,var(--green),var(--amber) 50%,var(--red));border-radius:3px;opacity:.25;width:100%}
+  .marker{position:absolute;top:50%;width:14px;height:14px;border-radius:50%;background:var(--ink);border:3px solid var(--bg);transform:translate(-50%,-50%);transition:left .6s cubic-bezier(.4,0,.2,1);box-shadow:0 0 0 1px var(--panel-edge);z-index:2}
+  .marker.lo{background:var(--green)}.marker.hi{background:var(--red)}.marker.out-hi{background:var(--blue)}.marker.out-lo{background:#a855f7}
+  .marker-star{position:absolute;top:50%;transform:translate(-50%,-60%);font-size:15px;line-height:1;color:var(--gold);z-index:3;text-shadow:0 0 5px rgba(0,0,0,.9);pointer-events:none}
+  .marker-star.active{animation:pulse 1.2s infinite}
+  .watch.retest{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset}
+  .retest-row{display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding:6px 10px;border-radius:6px;font-size:11px;font-weight:600;background:rgba(232,200,74,.1);color:var(--gold)}
+  .retest-row .tgt-price{font-family:ui-monospace,monospace;font-size:13px}
+  .bar-labels{display:flex;justify-content:space-between;margin-top:9px;font-family:ui-monospace,monospace;font-size:11px}
+  .bar-labels .lo-l{color:var(--green)}.bar-labels .hi-l{color:var(--red)}.bar-labels .pos-l{color:var(--ink-dim)}
+  .w-foot{display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:11px;border-top:1px solid var(--panel-edge)}
+  .w-state{font-size:11px;font-weight:700}
+  .w-state.safe{color:var(--ink-dim)}.w-state.near{color:var(--amber)}
+  .w-state.retest{color:var(--gold)}
+  .w-state.hit-lo{color:var(--green)}.w-state.hit-hi{color:var(--red)}
+  .w-state.breakout-up{color:var(--blue)}.w-state.breakout-down{color:#a855f7}
+  .btn-del{background:transparent;color:var(--ink-faint);font-size:11px;padding:4px 8px;border:1px solid var(--ink-faint);border-radius:5px}
+  .btn-del:active{color:var(--red);border-color:var(--red)}
+  .empty{text-align:center;color:var(--ink-faint);font-size:12px;padding:40px 20px;line-height:1.7}
+  .toolbar{display:flex;gap:8px;margin-bottom:14px}
+  /* トースト(画面上部に「何が鳴ったか」表示) */
+  #toastBox{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:99;width:calc(100% - 28px);max-width:520px;pointer-events:none}
+  .toast{background:#1a2233;border:1px solid var(--gold);border-left:4px solid var(--gold);color:var(--ink);font-size:12.5px;font-weight:600;padding:11px 13px;border-radius:9px;margin-bottom:7px;box-shadow:0 4px 20px rgba(0,0,0,.5);animation:toastIn .25s ease;line-height:1.5}
+  .toast.out{animation:toastOut .4s ease forwards}
+  .toast.strong{border-color:var(--green);border-left-color:var(--green);background:#122419}
+  .toast.warn2{border-color:var(--amber);border-left-color:var(--amber)}
+  .toast .t-time{font-family:ui-monospace,monospace;font-size:9.5px;color:var(--ink-dim);margin-left:8px}
+  @keyframes toastIn{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes toastOut{to{opacity:0;transform:translateY(-12px)}}
+  /* アラート履歴 */
+  .alert-log{background:var(--panel);border:1px solid var(--panel-edge);border-radius:9px;margin-bottom:14px;overflow:hidden}
+  .alert-log-head{display:flex;justify-content:space-between;align-items:center;padding:9px 12px;font-size:10px;color:var(--ink-dim);letter-spacing:.12em;text-transform:uppercase;cursor:pointer}
+  .alert-log-head .badge-n{background:var(--gold);color:#1a1505;font-size:9.5px;font-weight:800;padding:1px 7px;border-radius:8px;letter-spacing:0}
+  .alert-log-body{max-height:180px;overflow-y:auto;border-top:1px solid var(--panel-edge)}
+  .alert-log-body.hidden{display:none}
+  .log-row{display:flex;gap:8px;padding:7px 12px;font-size:11px;border-bottom:1px solid rgba(28,37,51,.5);line-height:1.5}
+  .log-row:last-child{border-bottom:none}
+  .log-time{font-family:ui-monospace,monospace;font-size:9.5px;color:var(--ink-faint);flex-shrink:0;padding-top:1px}
+  .log-msg{color:var(--ink-dim)}
+  .log-row.fresh .log-msg{color:var(--ink)}
+  .log-empty{padding:14px;text-align:center;font-size:10.5px;color:var(--ink-faint)}
+  .log-clear{background:none;border:none;color:var(--ink-faint);font-size:9.5px;cursor:pointer;padding:2px 4px}
+  .btn-tool{flex:1;background:var(--panel);border:1px solid var(--panel-edge);color:var(--ink-dim);font-size:11px;padding:8px;font-weight:600}
+  .btn-tool.on{color:var(--gold);border-color:var(--gold)}
+  /* 次の目標表示 */
+  .target-row{display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding:6px 10px;border-radius:6px;font-size:11px;font-weight:600}
+  .target-row.up{background:rgba(91,156,246,.1);color:var(--blue)}
+  .target-row.down{background:rgba(168,85,247,.1);color:#a855f7}
+  .target-row .tgt-label{opacity:.7}
+  .target-row .tgt-price{font-family:ui-monospace,monospace;font-size:13px}
+  /* スポット現物フロー行 */
+  .flow-row{display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding:6px 10px;border-radius:6px;font-size:10.5px;background:#070b11;color:var(--ink-dim)}
+  .flow-row .f-vals{font-family:ui-monospace,monospace}
+  .dir-buy{color:var(--green);font-weight:700}
+  .dir-sell{color:var(--red);font-weight:700}
+  .dir-neutral{color:var(--ink-dim);font-weight:700}
+  .flow-row .oi-chg{font-family:ui-monospace,monospace;color:var(--ink-dim)}
+  .flow-row .oi-chg.dry{color:#a78bfa}
+  /* ダマシ警戒 / 強シグナル */
+  .sig-row{margin-top:8px;padding:7px 10px;border-radius:6px;font-size:11px;font-weight:700;line-height:1.5}
+  .sig-row.weak{background:rgba(240,153,60,.12);color:var(--amber)}
+  .sig-row.strong{background:rgba(62,203,120,.14);color:var(--green);border:1px solid rgba(62,203,120,.35)}
+  /* 抵抗帯ラダー */
+  .ladder{margin-top:8px;background:#070b11;border-radius:6px;padding:4px 10px 6px}
+  .ladder-title{font-size:9px;color:var(--ink-faint);letter-spacing:.1em;text-transform:uppercase;padding:5px 0 3px}
+  .ladder-row{display:flex;justify-content:space-between;align-items:baseline;padding:4px 0;border-bottom:1px solid rgba(28,37,51,.5);font-size:11px}
+  .ladder-row:last-child{border-bottom:none}
+  .ladder-row .lv{font-family:ui-monospace,monospace;font-weight:700}
+  .ladder-row.up .lv{color:var(--blue)}
+  .ladder-row.down .lv{color:#a855f7}
+  .ladder-row .lv-dist{font-family:ui-monospace,monospace;font-size:9.5px;color:var(--ink-dim);margin-left:6px}
+  .ladder-row .src{color:var(--ink-faint);font-size:9.5px;text-align:right}
+  /* GitHub連携設定 */
+  .cfg-box{background:var(--panel);border:1px solid var(--panel-edge);border-radius:10px;margin-bottom:14px}
+  .cfg-box summary{padding:10px 14px;font-size:10.5px;color:var(--ink-dim);cursor:pointer;font-weight:600}
+  .cfg-box summary .cfg-ok{color:var(--green)}
+  .cfg-inner{padding:0 14px 14px}
+  .cfg-inner .row input{font-size:13px;padding:8px 10px}
+  .btn-save{background:var(--gold);color:#1a1505;padding:9px 16px;font-size:13px;width:100%}
+  .cfg-note{font-size:9.5px;color:var(--ink-faint);line-height:1.7;margin-top:9px}
+  .gh-status{font-size:9.5px;color:var(--ink-dim);margin-top:9px;font-family:ui-monospace,monospace;line-height:1.7;word-break:break-all}
+  .btn-bulk{flex:1;background:#070b11;border:1px solid var(--gold);color:var(--gold);font-size:12px;padding:8px 12px;font-weight:700}
+  .btn-bulk:active{background:rgba(232,200,74,.1)}
+  .btn-suggest{background:#070b11;border:1px solid var(--panel-edge);color:var(--ink-dim);font-size:11px;padding:8px 12px;font-weight:600;white-space:nowrap}
+  /* スキャン */
+  .btn-scan{flex:1;background:var(--panel);border:1px solid var(--blue);color:var(--blue);font-size:11px;padding:8px;font-weight:700}
+  .btn-scan.on{background:rgba(91,156,246,.12)}
+  .btn-rot{flex:1;background:var(--panel);border:1px solid #a78bfa;color:#a78bfa;font-size:11px;padding:8px;font-weight:700}
+  .btn-rot.on{background:rgba(167,139,250,.12)}
+  /* 反転力ランキング */
+  .rot-card{background:var(--panel);border:1px solid var(--panel-edge);border-radius:9px;padding:11px 13px;margin-bottom:8px;display:flex;align-items:center;gap:11px}
+  .rot-rank{font-family:ui-monospace,monospace;font-size:15px;font-weight:800;color:var(--ink-faint);width:22px;text-align:center;flex-shrink:0}
+  .rot-card.top1 .rot-rank{color:#a78bfa}
+  .rot-main{flex:1;min-width:0}
+  .rot-head{display:flex;align-items:baseline;gap:8px;margin-bottom:6px}
+  .rot-sym{font-size:14px;font-weight:700}
+  .rot-price{font-family:ui-monospace,monospace;font-size:10.5px;color:var(--ink-dim)}
+  .rot-fit{margin-left:auto;font-size:9.5px;font-weight:800;padding:1px 7px;border-radius:4px}
+  .rot-fit.good{background:rgba(167,139,250,.16);color:#a78bfa}
+  .rot-fit.mid{background:rgba(90,107,128,.2);color:var(--ink-dim)}
+  .rot-fit.bad{background:rgba(91,156,246,.14);color:var(--blue)}
+  .rbar-row{display:flex;align-items:center;gap:7px;margin-top:4px}
+  .rbar-label{font-size:9px;color:var(--ink-faint);width:44px;flex-shrink:0}
+  .rbar-track{flex:1;height:5px;background:#070b11;border-radius:3px;overflow:hidden}
+  .rbar-fill{height:100%;border-radius:3px}
+  .rbar-fill.rot{background:linear-gradient(90deg,#5b4a8a,#a78bfa)}
+  .rbar-fill.wave{background:linear-gradient(90deg,#8a6a2a,#e8c84a)}
+  .rbar-val{font-family:ui-monospace,monospace;font-size:9.5px;color:var(--ink-dim);width:44px;text-align:right;flex-shrink:0}
+  .rot-note{font-size:9.5px;color:var(--ink-faint);line-height:1.6;margin:2px 2px 10px}
+  .scan-wrap{margin-bottom:18px}
+  .scan-title{font-size:9px;color:var(--ink-dim);letter-spacing:.14em;text-transform:uppercase;margin:0 2px 8px;display:flex;justify-content:space-between}
+  .scan-card{background:var(--panel);border:1px solid var(--panel-edge);border-radius:9px;padding:11px 13px;margin-bottom:8px;display:flex;align-items:center;gap:10px}
+  .scan-card:last-child{margin-bottom:0}
+  .sc-main{flex:1;min-width:0}
+  .sc-top{display:flex;align-items:baseline;gap:8px;margin-bottom:5px}
+  .sc-sym{font-size:14px;font-weight:700}
+  .sc-price{font-family:ui-monospace,monospace;font-size:11px;color:var(--ink-dim)}
+  .sc-tags{display:flex;flex-wrap:wrap;gap:5px}
+  .tag{font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:.02em}
+  .tag.up{background:rgba(62,203,120,.14);color:var(--green)}
+  .tag.down{background:rgba(232,80,74,.14);color:var(--red)}
+  .tag.res{background:rgba(232,80,74,.1);color:var(--amber)}
+  .tag.sup{background:rgba(62,203,120,.1);color:var(--green)}
+  .sc-add{background:var(--gold);color:#1a1505;font-size:12px;padding:8px 14px;white-space:nowrap;border-radius:6px;font-weight:700}
+  .sc-add:active{transform:translateY(1px)}
+  .sc-add.done{background:var(--panel-edge);color:var(--ink-dim)}
+  .scan-empty{text-align:center;color:var(--ink-faint);font-size:11px;padding:16px;line-height:1.6}
+  .scan-card.has-setup{border-left:3px solid var(--panel-edge)}
+  .scan-card.has-setup.long{border-left-color:var(--green)}
+  .scan-card.has-setup.short{border-left-color:var(--red)}
+  .sc-dir{font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;letter-spacing:.04em}
+  .sc-dir.long{background:rgba(62,203,120,.16);color:var(--green)}
+  .sc-dir.short{background:rgba(232,80,74,.16);color:var(--red)}
+  .sc-rr{margin-left:auto;font-family:ui-monospace,monospace;font-size:12px;font-weight:800;color:var(--gold);padding:1px 7px;border:1px solid rgba(232,200,74,.35);border-radius:5px}
+  .sc-levels{font-family:ui-monospace,monospace;font-size:10px;color:var(--ink-dim);margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  /* 壁アタック詳細 */
+  .btn-detail{width:100%;background:transparent;border:1px dashed var(--panel-edge);color:var(--ink-dim);font-size:10.5px;padding:7px;margin-top:10px;font-weight:600}
+  .btn-detail.on{color:var(--gold);border-color:rgba(232,200,74,.4);border-style:solid}
+  .detail-panel{margin-top:10px;padding-top:10px;border-top:1px solid var(--panel-edge)}
+  .attack-grid{display:flex;gap:8px;margin-bottom:10px}
+  .attack-box{flex:1;background:#070b11;border-radius:7px;padding:8px 9px}
+  .attack-box .ab-label{font-size:9px;color:var(--ink-faint);letter-spacing:.06em;margin-bottom:4px}
+  .attack-box .ab-total{font-family:ui-monospace,monospace;font-size:17px;font-weight:700;line-height:1}
+  .attack-box.hi .ab-total{color:var(--red)}
+  .attack-box.lo .ab-total{color:var(--green)}
+  .attack-box .ab-split{font-size:9.5px;color:var(--ink-dim);margin-top:4px;line-height:1.5}
+  .attack-box .wick-n{color:var(--ink)}
+  .attack-box .body-n{color:var(--gold);font-weight:700}
+  .retest-count-badge{display:inline-block;background:rgba(232,200,74,.14);color:var(--gold);font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:4px;margin-left:6px}
+  .candle-wrap{background:#070b11;border-radius:8px;padding:10px 6px 8px;overflow-x:auto}
+  .candle-legend{display:flex;gap:14px;font-size:9px;color:var(--ink-faint);margin-top:7px;padding:0 2px;flex-wrap:wrap}
+  .candle-legend span{display:flex;align-items:center;gap:4px}
+  .leg-swatch{display:inline-block;width:9px;height:9px;border-radius:2px}
+  .leg-wick{width:2px;height:9px;background:var(--ink-dim);border-radius:1px}
+  .detail-loading{text-align:center;color:var(--ink-faint);font-size:10.5px;padding:14px}
+  .tf-select{display:flex;gap:5px;margin-bottom:8px}
+  .tf-btn{background:#070b11;border:1px solid var(--panel-edge);color:var(--ink-dim);font-size:10px;padding:4px 9px;border-radius:5px;font-weight:600}
+  .tf-btn.on{color:var(--gold);border-color:var(--gold)}
+  .msg{font-size:10.5px;margin-top:8px;line-height:1.5;display:none}
+  .msg.show{display:block}
+  .msg.ok{color:var(--green)}
+  .msg.err{color:var(--red)}
 </style>
 </head>
 <body>
 <header>
-  <h1>レンジ監視・波動ダッシュボード <span>RANGE ALERT</span></h1>
-  <div><button class="ghost small" id="reload">更新</button> <span id="upd" class="mono small"></span></div>
+  <h1><span class="dot"></span>レンジ監視レーダー</h1>
+  <span class="sub">FUTURES</span>
 </header>
-
-<main>
-
-<div class="section">
-  <h2>月足ウェーブ判定(wave_analyzer)</h2>
-  <div class="grid" id="waveGrid">
-    <div class="card"><h3>—</h3><div class="small">下の接続設定でトークンを入力してください</div></div>
+<div class="status-line">
+  <span id="clock">--:--:--</span>
+  <span id="feed" class="live">接続中…</span>
+</div>
+<div id="toastBox"></div>
+<div class="toolbar">
+  <button class="btn-tool" id="notifyBtn" onclick="reqNotify()">🔔 通知を許可</button>
+  <button class="btn-tool on" id="soundBtn" onclick="toggleSound()">🔊 音 ON</button>
+  <button class="btn-tool" id="voiceBtn" onclick="toggleVoice()">🗣 読み上げ OFF</button>
+</div>
+<div class="alert-log">
+  <div class="alert-log-head" onclick="toggleLog()">
+    <span>📜 アラート履歴 <span class="badge-n" id="logBadge" style="display:none">0</span></span>
+    <span><button class="log-clear" onclick="event.stopPropagation();clearLog()">クリア</button> <span id="logArrow">▼</span></span>
   </div>
+  <div class="alert-log-body hidden" id="logBody"><div class="log-empty">まだアラートはありません</div></div>
 </div>
 
-<div class="section">
-  <h2>レンジを追加</h2>
-  <div class="card">
+<details class="cfg-box" id="cfgBox">
+  <summary id="cfgSummary">⚙ GitHub連携(現物フロー・OI・保有銘柄・レンジ同期)</summary>
+  <div class="cfg-inner">
     <div class="row">
-      <div class="field"><label>銘柄(base)</label>
-        <input id="rAsset" class="mono" placeholder="XRP" list="holdingsList">
-        <datalist id="holdingsList"></datalist></div>
-      <div class="field"><label>下限</label><input id="rLower" type="number" step="any"></div>
-      <div class="field"><label>上限</label><input id="rUpper" type="number" step="any"></div>
+      <input id="cfgOwner" placeholder="owner">
+      <input id="cfgRepo" placeholder="repo">
+      <input id="cfgBranch" placeholder="branch">
     </div>
-    <button class="ghost small" id="suggestBtn" type="button">直近30日高安を提案</button>
-    <button id="addRangeBtn" type="button">追加</button>
-    <div class="msg" id="addMsg"></div>
-    <p class="small" style="margin-top:10px">
-      <button class="ghost small" id="bulkAddBtn" type="button">保有銘柄を一括追加(直近30日高安)</button>
-      — holdings.jsonの銘柄のうち、まだレンジ未設定のものをまとめて追加します
-    </p>
-    <div class="msg" id="bulkMsg"></div>
+    <div class="row"><input id="cfgToken" type="password" placeholder="GitHub PAT (level: Contents Read/Write)"></div>
+    <div class="row"><button class="btn-save" onclick="saveCfg()">設定を保存して接続</button></div>
+    <div class="gh-status" id="ghStatus"></div>
+    <div class="cfg-note">
+      トークンはこの端末のlocalStorageのみに保存(送信先はGitHub APIだけ)。
+      監視銘柄はlevelリポの range_watch.json に自動同期され、Actions側(spot_flow_scan.py)が
+      15分ごとに現物Taker買い/売りを取得します。CoinGlassのキーはこのページには一切登場しません。
+      OI(建玉)データは coinglass_signals.json(保有銘柄のみ・3時間毎更新)から読みます。
+    </div>
   </div>
+</details>
+
+<div class="add-card">
+  <div class="label">ワンタップで追加(24h高安レンジ + 次の目標自動計算)</div>
+  <div class="presets" id="presets"></div>
+  <div class="label" style="margin-top:12px">手動で追加</div>
+  <div class="row"><input id="in-sym" placeholder="銘柄 (例: BTC, ETH)" autocapitalize="characters" list="holdSyms"><datalist id="holdSyms"></datalist></div>
+  <div class="row">
+    <input id="in-lo" type="number" step="any" placeholder="下限価格">
+    <input id="in-hi" type="number" step="any" placeholder="上限価格">
+  </div>
+  <div class="row">
+    <button class="btn-suggest" onclick="suggest30d()" id="suggestBtn">30日高安を入力</button>
+    <button class="btn-add" onclick="addWatch()" style="flex:1">追加して監視開始</button>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <button class="btn-bulk" id="bulkBtn" onclick="bulkAddHoldings()">📦 保有銘柄を一括追加(30日高安レンジ)</button>
+  </div>
+  <div class="msg" id="addMsg"></div>
+  <div class="hint">レンジ内→逆張り通知、ブレイクアウト→抵抗帯ラダー(フィボ拡張・ラウンドナンバー・スイング)を自動表示。現物売り越しでの上抜けは「ダマシ警戒」を出します。</div>
 </div>
-
-<div class="section">
-  <h2>アクティブレンジ監視(15分ごと自動記録)</h2>
-  <div id="rangesList"></div>
+<div class="scan-wrap">
+  <div class="toolbar" style="margin-bottom:10px">
+    <button class="btn-scan" id="scanBtn" onclick="runScan()">🔍 トレンド / 日足S・R をスキャン</button>
+    <button class="btn-rot" id="rotBtn" onclick="runRotScan()">🔄 反転力ランキング</button>
+  </div>
+  <div id="scanResults"></div>
 </div>
+<div id="list"></div>
 
-<div class="section">
-  <details id="cfgBox">
-    <summary>接続設定(初回のみ、level読み書きPAT)</summary>
-    <div class="card" style="margin-top:10px">
-      <div class="row">
-        <div class="field"><label>Owner</label><input id="cfgOwner" class="mono"></div>
-        <div class="field"><label>Repo</label><input id="cfgRepo" class="mono"></div>
-        <div class="field"><label>Branch</label><input id="cfgBranch" class="mono"></div>
-      </div>
-      <div class="field"><label>GitHub PAT(Contents: Read/Write、levelリポ1つのみに限定)</label>
-        <input id="cfgToken" type="password" class="mono" placeholder="github_pat_..."></div>
-      <button class="ghost" id="cfgSave" type="button">設定を保存</button>
-      <p class="small" style="margin-top:8px">
-        トークンはこの端末のlocalStorageのみに保存(送信先はGitHub APIだけ)。
-        holdings.htmlと同じ読み書きトークンを共用できます。<br>
-        CoinGlassのスポット流入データはActions側(spot_flow_scan.py)で取得済みのものを読むだけなので、
-        CoinGlassのキーはこのページには一切登場しません。
-      </p>
-    </div>
-  </details>
-</div>
-
-<p class="small" id="errBox"></p>
-
-</main>
 <script>
-const $=id=>document.getElementById(id);
-const errs=[];
-function fail(name,e){errs.push(`${name}: ${e.message||e}`);
-  $('errBox').innerHTML='<span class="up">'+errs.join(' / ')+'</span>';}
-function chgClass(v){return v>0?'ok':v<0?'up':''}
-function chgSign(v){return v>0?'+'+v.toFixed(2):v.toFixed(2)}
+const TICKER_API = "https://api.crypto.com/exchange/v1/public/get-tickers";
+const KLINE_API = "https://api.crypto.com/exchange/v1/public/get-candlestick";
+const BINGX_API = "https://open-api.bingx.com";
+const NEAR_PCT = 0.5;
+const RETEST_PCT = 0.8;   // ブレイク後、境界にこの%以内へ戻ったらリテスト
+const FAIL_PCT = 2.0;     // 境界からこの%逆行したらブレイク失敗(記憶リセット)
+const POLL_MS = 8000;
+const GH_REFRESH_MS = 5*60*1000;   // spot_flow / coinglass の再読み込み間隔
 
-// ---------- 接続設定(level 読み書き) ----------
+const PRESET_COINS = [
+  { sym:"BTC",  insts:["BTC_USDT","BTCUSD","BTC_USD"] },
+  { sym:"ETH",  insts:["ETH_USDT","ETHUSD","ETH_USD"] },
+  { sym:"SOL",  insts:["SOL_USDT","SOLUSD","SOL_USD"] },
+  { sym:"XRP",  insts:["XRP_USDT","XRPUSD","XRP_USD"] },
+  { sym:"DOGE", insts:["DOGE_USDT","DOGEUSD","DOGE_USD"] },
+  { sym:"XPL",  insts:["XPL_USD","XPLUSD","XPL_USDT"] },
+  { sym:"BONK", insts:["BONK_USDT","BONKUSD","BONK_USD"] },
+  { sym:"PEPE", insts:["PEPE_USDT","PEPEUSD","PEPE_USD"] },
+  { sym:"AVAX", insts:["AVAX_USDT","AVAXUSD","AVAX_USD"] },
+  { sym:"LINK", insts:["LINK_USDT","LINKUSD","LINK_USD"] },
+  { sym:"ONDO", insts:["ONDO_USDT","ONDOUSD","ONDO_USD"] },
+  { sym:"EIGEN",insts:["EIGEN_USDT","EIGENUSD","EIGEN_USD"] },
+  { sym:"XLM",  insts:["XLM_USDT","XLMUSD","XLM_USD"] },
+];
+
+let watches = [];
+let soundOn = true;
+let lastAlertState = {};
+let lastSubState = {};   // weak_breakout / strong シグナルの発火済み管理
+let tickerCache = {};
+let levelCache = {}; // sym -> {resistances:[], supports:[]}
+let candleCache = {}; // "sym|tf" -> {candles, ts}
+let detailOpen = {};  // watch.id -> bool(詳細パネルの開閉状態)
+let detailTf = {};    // watch.id -> "1h"|"4h"|"1D"(選択中の足)
+let detailLoading = {}; // watch.id -> bool
+const ATTACK_TOUCH_PCT = 0.6;  // 壁アタック判定(この%以内にヒゲが届いたらアタック扱い)
+const CANDLE_COUNT = 40;       // 表示するローソク本数
+
+function load(){try{watches=JSON.parse(localStorage.getItem("range_watches2")||"[]")}catch{watches=[]}}
+function save(){localStorage.setItem("range_watches2",JSON.stringify(watches))}
+
+function renderPresets(){
+  document.getElementById("presets").innerHTML = PRESET_COINS.map(p =>
+    `<button class="preset-btn" id="pre-${p.sym}" onclick="addPreset('${p.sym}')">${p.sym}</button>`
+  ).join("");
+}
+
+// ―― GitHub連携(level読み書き。CoinGlassキーはActions側のみ) ――
 const CFG_LS='range_alert_cfg';
 let cfg=Object.assign(
   {owner:'edyu-bit',repo:'level',branch:'main',token:''},
   JSON.parse(localStorage.getItem(CFG_LS)||'{}'));
+let spotFlow={}, spotFlowTs=null, cgSignals={}, cgTs=null, holdingsCache=[];
+let rwSha=null, rwLoaded=false, lastPushed="", syncTimer=null;
+const ghNotes=[];
+
 function fillCfg(){
-  $('cfgOwner').value=cfg.owner; $('cfgRepo').value=cfg.repo;
-  $('cfgBranch').value=cfg.branch; $('cfgToken').value=cfg.token;
+  document.getElementById("cfgOwner").value=cfg.owner;
+  document.getElementById("cfgRepo").value=cfg.repo;
+  document.getElementById("cfgBranch").value=cfg.branch;
+  document.getElementById("cfgToken").value=cfg.token;
+  document.getElementById("cfgSummary").innerHTML =
+    cfg.token ? '⚙ GitHub連携 <span class="cfg-ok">● 接続設定済み</span>'
+              : '⚙ GitHub連携(現物フロー・OI・保有銘柄・レンジ同期)— 未設定';
+}
+function ghNote(s){
+  ghNotes.unshift(new Date().toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"})+" "+s);
+  document.getElementById("ghStatus").innerHTML=ghNotes.slice(0,4).join("<br>");
 }
 function b64ToUtf8(b64){
   const bin=atob(b64.replace(/\n/g,''));
@@ -164,161 +379,202 @@ async function ghPutFile(path, text, message, sha){
   const r=await fetch(
     `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${path}`,
     {method:'PUT',
-     headers:{'Accept':'application/vnd.github+json',
-              'Authorization':'Bearer '+cfg.token},
+     headers:{'Accept':'application/vnd.github+json','Authorization':'Bearer '+cfg.token},
      body:JSON.stringify(body)});
   if(!r.ok){const j=await r.json().catch(()=>({}));throw new Error(r.status+' '+(j.message||''));}
   const j=await r.json();
   return j.content.sha;
 }
 
-// ---------- BingX 公開API(クライアント直叩き、キー不要) ----------
-async function bingxPrice(base){
-  const r=await fetch(`https://open-api.bingx.com/openApi/swap/v2/quote/price?symbol=${base}-USDT`);
-  const j=await r.json();
-  return parseFloat(j?.data?.price);
+async function loadSpotFlow(){
+  if(!cfg.token) return;
+  try{
+    const r=await ghGetFile('spot_flow.json');
+    if(r.text){const j=JSON.parse(r.text); spotFlow=j.flows||{}; spotFlowTs=j.ts||null;}
+  }catch(e){ ghNote('spot_flow読込失敗: '+e.message); }
 }
-async function bingxDaily(base, limit){
-  const r=await fetch(`https://open-api.bingx.com/openApi/swap/v3/quote/klines?symbol=${base}-USDT&interval=1d&limit=${limit||60}`);
+async function loadCoinglass(){
+  if(!cfg.token) return;
+  try{
+    const r=await ghGetFile('coinglass_signals.json');
+    if(r.text){const j=JSON.parse(r.text); cgSignals=j.signals||{}; cgTs=j.ts||null;}
+  }catch(e){ /* OIは補助データなので失敗しても致命的ではない */ }
+}
+async function loadHoldings(){
+  if(!cfg.token) return;
+  try{
+    const r=await ghGetFile('holdings.json');
+    holdingsCache=r.text?(JSON.parse(r.text).holdings||[]):[];
+    document.getElementById("holdSyms").innerHTML=holdingsCache.map(h=>`<option value="${h}">`).join('');
+  }catch(e){ ghNote('holdings読込失敗: '+e.message); }
+}
+// range_watch.json → 監視リストへマージ(リポ側にだけある銘柄を取り込む)
+async function loadRangeWatch(){
+  if(!cfg.token) return;
+  try{
+    const r=await ghGetFile('range_watch.json');
+    let repoRanges=[];
+    if(!r.notFound){ repoRanges=JSON.parse(r.text).ranges||[]; rwSha=r.sha; lastPushed=r.text; }
+    rwLoaded=true;
+    let added=0;
+    for(const rr of repoRanges){
+      if(!rr.asset||!isFinite(rr.lower)||!isFinite(rr.upper)) continue;
+      if(!watches.find(w=>w.sym===rr.asset)){
+        watches.push(mkWatch(rr.asset, rr.lower, rr.upper, rr.created_ts));
+        added++;
+      }
+    }
+    if(added){ save(); render(); }
+    queueSync();   // ローカル側にだけある銘柄をリポへ反映
+  }catch(e){ ghNote('range_watch読込失敗: '+e.message); }
+}
+// 監視リスト → range_watch.json 同期(spot_flow_scan.pyのスキャン対象を最新に保つ)
+function queueSync(){
+  if(!cfg.token||!rwLoaded) return;
+  clearTimeout(syncTimer);
+  syncTimer=setTimeout(doSync, 1500);
+}
+async function doSync(){
+  const ranges=watches.map(w=>({asset:w.sym, lower:w.lo, upper:w.hi,
+    created_ts:w.created||new Date().toISOString()}));
+  const text=JSON.stringify({ranges},null,1)+"\n";
+  if(text===lastPushed) return;
+  try{
+    rwSha=await ghPutFile('range_watch.json', text, 'update ranges from range_alert', rwSha);
+    lastPushed=text; ghNote('range_watch同期OK('+ranges.length+'銘柄)');
+  }catch(e){
+    // SHA不整合などは最新SHAを取り直して1回だけ再試行
+    try{
+      const f=await ghGetFile('range_watch.json');
+      rwSha=await ghPutFile('range_watch.json', text, 'update ranges from range_alert',
+        f.notFound?null:f.sha);
+      lastPushed=text; ghNote('range_watch同期OK(再試行)');
+    }catch(e2){ ghNote('range_watch同期失敗: '+e2.message); }
+  }
+}
+function saveCfg(){
+  cfg={owner:document.getElementById("cfgOwner").value.trim(),
+       repo:document.getElementById("cfgRepo").value.trim()||'level',
+       branch:document.getElementById("cfgBranch").value.trim()||'main',
+       token:document.getElementById("cfgToken").value.trim()};
+  localStorage.setItem(CFG_LS, JSON.stringify(cfg));
+  fillCfg();
+  rwLoaded=false; rwSha=null; lastPushed="";
+  initGh();
+}
+function updateGhStatus(){
+  if(!cfg.token) return;
+  const parts=[];
+  if(spotFlowTs) parts.push("flow "+new Date(spotFlowTs*1000).toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"}));
+  if(cgTs) parts.push("OI "+new Date(cgTs*1000).toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"}));
+  if(holdingsCache.length) parts.push("保有"+holdingsCache.length+"銘柄");
+  if(parts.length) ghNote("データ更新: "+parts.join(" / "));
+}
+async function initGh(){
+  if(!cfg.token){ document.getElementById("cfgBox").open=true; return; }
+  await fetchAllTickers().catch(()=>{});
+  await Promise.all([loadHoldings(), loadSpotFlow(), loadCoinglass(), loadRangeWatch()]);
+  updateGhStatus();
+  render();
+}
+
+// ―― BingX 公開API(クライアント直叩き、キー不要。Crypto.comに無い銘柄のフォールバック兼30日高安用) ――
+async function bingxTicker(base){
+  const r=await fetch(`${BINGX_API}/openApi/swap/v2/quote/ticker?symbol=${base}-USDT`);
+  const j=await r.json();
+  const d=j?.data||{};
+  return {price:parseFloat(d.lastPrice??d.price??0), chg:parseFloat(d.priceChangePercent??0)};
+}
+async function bingxKlines(base, interval, limit){
+  const r=await fetch(`${BINGX_API}/openApi/swap/v3/quote/klines?symbol=${base}-USDT&interval=${interval}&limit=${limit||60}`);
   const j=await r.json();
   const rows=j?.data||[];
   return rows.map(row=>Array.isArray(row)
     ?{t:+row[0],o:+row[1],h:+row[2],l:+row[3],c:+row[4]}
     :{t:+(row.time??row.t),o:+row.open,h:+row.high,l:+row.low,c:+row.close}
-  ).sort((a,b)=>a.t-b.t);
+  ).filter(c=>c.h>0&&c.l>0).sort((a,b)=>a.t-b.t);
 }
-
-// ---------- state ----------
-let ranges=[], rangesSha=null, spotFlow={}, waveAssets=[];
-let latestLogSha=null, dailyLogSha=null, dailyLogDate=null, dailyLogText='';
-
-async function loadRangeWatch(){
-  try{
-    const r=await ghGetFile('range_watch.json');
-    if(r.notFound){ ranges=[]; rangesSha=null; }
-    else{ ranges=JSON.parse(r.text).ranges||[]; rangesSha=r.sha; }
-  }catch(e){ fail('range_watch.json',e); }
-}
-async function loadSpotFlow(){
-  try{
-    const r=await ghGetFile('spot_flow.json');
-    spotFlow=r.text?(JSON.parse(r.text).flows||{}):{};
-  }catch(e){ spotFlow={}; }
-}
-async function loadWaveData(){
-  try{
-    const r=await ghGetFile('logs/wave/latest.json');
-    waveAssets=r.text?(JSON.parse(r.text).assets||[]):[];
-  }catch(e){ waveAssets=[]; fail('logs/wave/latest.json',e); }
-}
-let holdingsCache=[];
-async function loadHoldings(){
-  try{
-    const r=await ghGetFile('holdings.json');
-    holdingsCache=r.text?(JSON.parse(r.text).holdings||[]):[];
-    $('holdingsList').innerHTML=holdingsCache.map(h=>`<option value="${h}">`).join('');
-  }catch(e){ /* holdings.jsonは補助情報なので取得失敗しても致命的ではない */ }
-}
-
-async function suggestRangeFor(asset){
-  const d=await bingxDaily(asset, 30);
+async function suggestRangeFor(sym){
+  const d=await bingxKlines(sym,"1d",30);
   if(!d.length) return null;
   return {lower:Math.min(...d.map(c=>c.l)), upper:Math.max(...d.map(c=>c.h))};
 }
 
-$('suggestBtn').onclick=async ()=>{
-  const asset=$('rAsset').value.trim().toUpperCase();
-  if(!asset){ showMsgIn('addMsg','銘柄を入力してください',false); return; }
-  $('suggestBtn').disabled=true;
-  try{
-    const s=await suggestRangeFor(asset);
-    if(!s){ showMsgIn('addMsg','価格データを取得できませんでした('+asset+')',false); return; }
-    $('rLower').value=s.lower; $('rUpper').value=s.upper;
-    showMsgIn('addMsg','直近30日の高安値を反映しました(必要なら調整してください)', true);
-  }catch(e){ showMsgIn('addMsg','取得失敗: '+e.message,false); }
-  $('suggestBtn').disabled=false;
-};
-
-$('bulkAddBtn').onclick=async ()=>{
-  if(!cfg.token){ showMsgIn('bulkMsg','トークンが未設定です',false); $('cfgBox').open=true; return; }
-  const existing=new Set(ranges.map(r=>r.asset));
-  const targets=holdingsCache.filter(h=>!existing.has(h));
-  if(!targets.length){ showMsgIn('bulkMsg','追加対象なし(全銘柄すでにレンジ設定済み)', true); return; }
-  $('bulkAddBtn').disabled=true;
-  showMsgIn('bulkMsg', `${targets.length}銘柄を取得中…`, true);
-  const added=[];
-  for(const asset of targets){
-    try{
-      const s=await suggestRangeFor(asset);
-      if(s) added.push({asset, lower:s.lower, upper:s.upper, created_ts:new Date().toISOString()});
-    }catch(e){ /* 個別失敗はスキップして継続 */ }
+// ―― ヒゲ・スイングレベル計算 ――
+function findSwingHighs(highs, lookback) {
+  const levels = [];
+  for (let i = lookback; i < highs.length - lookback; i++) {
+    let isHigh = true;
+    for (let j = 1; j <= lookback; j++) {
+      if (highs[i] <= highs[i-j] || highs[i] <= highs[i+j]) { isHigh = false; break; }
+    }
+    if (isHigh) levels.push(highs[i]);
   }
-  if(!added.length){ showMsgIn('bulkMsg','価格データを取得できませんでした',false); $('bulkAddBtn').disabled=false; return; }
-  const before=ranges.slice();
-  ranges=ranges.concat(added);
-  try{
-    rangesSha=await ghPutFile('range_watch.json', JSON.stringify({ranges},null,1)+'\n',
-      `bulk add ${added.length} ranges`, rangesSha);
-    showMsgIn('bulkMsg', `${added.length}銘柄を追加しました(${added.map(a=>a.asset).join('、')})`, true);
-    await renderRanges();
-  }catch(e){ ranges=before; showMsgIn('bulkMsg','保存失敗: '+e.message,false); }
-  $('bulkAddBtn').disabled=false;
-};
-
-const PHASE_ICON={wave2_likely_complete:'🟢',wave2_basing:'🟡',wave2_in_progress:'⚪'};
-function renderWaveDashboard(){
-  if(!waveAssets.length){
-    $('waveGrid').innerHTML='<div class="card"><h3>—</h3><div class="small">データなし(トークン未設定 or 未実行)</div></div>';
-    return;
+  return levels;
+}
+function findSwingLows(lows, lookback) {
+  const levels = [];
+  for (let i = lookback; i < lows.length - lookback; i++) {
+    let isLow = true;
+    for (let j = 1; j <= lookback; j++) {
+      if (lows[i] >= lows[i-j] || lows[i] >= lows[i+j]) { isLow = false; break; }
+    }
+    if (isLow) levels.push(lows[i]);
   }
-  $('waveGrid').innerHTML=waveAssets.map(a=>{
-    if(a.error) return `<div class="card"><h3>${a.asset}</h3><div class="small up">取得失敗</div></div>`;
-    const sw=a.current_subwave||{};
-    const b=a.bounce_setup;
-    return `<div class="card">
-      <h3>${a.asset} <span class="pill">${PHASE_ICON[a.verdict]||''} ${a.verdict}</span></h3>
-      <div class="mono" style="font-size:20px">$${a.price}</div>
-      <div class="small">スコア${a.completion_score} / 強気カウント${a.bull_count_alive?'生存':'⚠危機'}</div>
-      <div class="small">一次突破${a.primary_break?'✅':'—'} / 本確認${a.wave3_confirmed?'✅':'—'}</div>
-      <div class="small" style="margin-top:6px">サブウェーブ: ${sw.primary_wave??'—'}波 ${sw.primary_stage??''}
-        / 中サイズ${sw.intermediate??'unclear'}(信頼度${sw.intermediate_confidence??0})</div>
-      ${b&&b.active?`<div class="small ok" style="margin-top:4px">🟢反発Setup target${b.target} inval${b.invalidation}</div>`:''}
-    </div>`;
-  }).join('');
+  return levels;
 }
 
-// ---------- レンジ追加 ----------
-$('addRangeBtn').onclick=async ()=>{
-  if(!cfg.token){ showMsgIn('addMsg','トークンが未設定です',false); $('cfgBox').open=true; return; }
-  const asset=$('rAsset').value.trim().toUpperCase();
-  const lower=parseFloat($('rLower').value), upper=parseFloat($('rUpper').value);
-  if(!asset||!isFinite(lower)||!isFinite(upper)||lower>=upper){
-    showMsgIn('addMsg','銘柄・下限・上限を正しく入力してください(下限<上限)',false); return;
-  }
-  const range={asset, lower, upper, created_ts:new Date().toISOString()};
-  ranges.push(range);
-  try{
-    rangesSha=await ghPutFile('range_watch.json', JSON.stringify({ranges},null,1)+'\n',
-      `add range ${asset}`, rangesSha);
-    showMsgIn('addMsg','追加しました: '+asset, true);
-    $('rAsset').value=''; $('rLower').value=''; $('rUpper').value='';
-    await renderRanges();
-  }catch(e){ ranges.pop(); showMsgIn('addMsg','保存失敗: '+e.message,false); }
-};
-function showMsgIn(id,text,ok){
-  const m=$(id); m.textContent=text; m.className='msg show '+(ok?'ok':'err');
+// ―― 汎用ローソク足取得(Crypto.com→ダメならBingXへフォールバック) ――
+async function cdcKlines(inst, tf, count){
+  const res = await fetch(KLINE_API+"?instrument_name="+inst+"&timeframe="+tf+(count?("&count="+count):""));
+  const json = await res.json();
+  let data = (json.result&&json.result.data)||json.data||[];
+  data.sort((a,b)=>(a.t||new Date(a.timestamp).getTime()||0)-(b.t||new Date(b.timestamp).getTime()||0));
+  return data.map(d=>({
+    o: parseFloat(d.o!=null?d.o:d.open),
+    h: parseFloat(d.h!=null?d.h:d.high),
+    l: parseFloat(d.l!=null?d.l:d.low),
+    c: parseFloat(d.c!=null?d.c:d.close),
+  })).filter(c=>c.h>0&&c.l>0);
 }
-window.removeRange=async (idx)=>{
-  const removed=ranges.splice(idx,1);
-  try{
-    rangesSha=await ghPutFile('range_watch.json', JSON.stringify({ranges},null,1)+'\n',
-      'remove range', rangesSha);
-    await renderRanges();
-  }catch(e){ ranges.splice(idx,0,...removed); fail('range削除',e); }
-};
+async function fetchCandles(w, tf, count){
+  const key = w.sym+"|"+tf;
+  if(candleCache[key] && Date.now()-candleCache[key].ts < 300000) return candleCache[key].candles;
+  let candles=null;
+  try{ candles=await cdcKlines(w.inst, tf, count); }catch(e){}
+  if(!candles||!candles.length){
+    const bi={"1h":"1h","4h":"4h","1D":"1d"}[tf]||"4h";
+    try{ candles=await bingxKlines(w.sym, bi, count); }catch(e){}
+  }
+  if(!candles||!candles.length) return null;
+  candleCache[key] = {candles, ts:Date.now()};
+  return candles;
+}
+async function fetchLevels(w) {
+  const key=w.sym;
+  if (levelCache[key] && Date.now() - levelCache[key].ts < 300000) return levelCache[key];
+  const candles=await fetchCandles(w,"4h",80);
+  if(!candles||candles.length<10) return null;
+  const highs = candles.map(c=>c.h);
+  const lows = candles.map(c=>c.l);
+  const resistances = [...new Set(findSwingHighs(highs, 2))].sort((a,b) => a-b);
+  const supports = [...new Set(findSwingLows(lows, 2))].sort((a,b) => b-a);
+  levelCache[key] = { resistances, supports, ts: Date.now() };
+  return levelCache[key];
+}
+function getNextResistance(levels, price) {
+  if (!levels || !levels.resistances) return null;
+  for (const r of levels.resistances) { if (r > price * 1.002) return r; }
+  return null;
+}
+function getNextSupport(levels, price) {
+  if (!levels || !levels.supports) return null;
+  for (const s of levels.supports) { if (s < price * 0.998) return s; }
+  return null;
+}
 
-// ---------- 抵抗帯ラダー ----------
-function niceRoundLevels(price, count){
+// ―― 抵抗帯/支持帯ラダー(測定幅・フィボ拡張・ラウンドナンバー・4hスイング) ――
+function niceRoundUp(price, count){
   const mag=Math.pow(10, Math.floor(Math.log10(price)));
   const step=mag/2;
   const out=[];
@@ -326,145 +582,950 @@ function niceRoundLevels(price, count){
   for(let i=0;i<count;i++){ out.push(lv); lv+=step; }
   return out;
 }
-function buildLadder(range, price, dailyHigh, waveTargets){
-  const H=range.upper-range.lower;
-  const cands=[];
-  cands.push({level:range.upper+H, source:'測定移動'});
-  cands.push({level:range.upper+1.618*H, source:'測定移動'});
-  [1.272,1.618,2.0,2.618].forEach(r=>cands.push({level:range.upper+r*H, source:'フィボ拡張'}));
-  if(dailyHigh) cands.push({level:dailyHigh, source:'直近スイング高値'});
-  niceRoundLevels(range.upper, 3).forEach(lv=>cands.push({level:lv, source:'ラウンドナンバー'}));
-  (waveTargets||[]).forEach(t=>cands.push({level:t.level, source:`月足Wave3(x${t.fib})`}));
-
-  const above=cands.filter(c=>c.level>price).sort((a,b)=>a.level-b.level);
+function niceRoundDown(price, count){
+  const mag=Math.pow(10, Math.floor(Math.log10(price)));
+  const step=mag/2;
+  const out=[];
+  let lv=Math.floor(price/step)*step;
+  for(let i=0;i<count&&lv>0;i++){ out.push(lv); lv-=step; }
+  return out.filter(v=>v>0);
+}
+function buildLadderUp(w){
+  const H=w.hi-w.lo, p=w.price;
+  if(!(H>0&&p>0)) return [];
+  const c=[{level:w.hi+H, src:"測定幅+1.0H"}];
+  [1.272,1.618,2.0,2.618].forEach(r=>c.push({level:w.hi+r*H, src:"フィボ"+r}));
+  niceRoundUp(Math.max(w.hi,p), 3).forEach(lv=>c.push({level:lv, src:"ラウンド"}));
+  const lvl=levelCache[w.sym];
+  if(lvl) lvl.resistances.filter(r=>r>p*1.002).slice(0,3).forEach(r=>c.push({level:r, src:"4hスイング高値"}));
+  return mergeLadder(c.filter(x=>x.level>p*1.002));
+}
+function buildLadderDown(w){
+  const H=w.hi-w.lo, p=w.price;
+  if(!(H>0&&p>0)) return [];
+  const c=[{level:w.lo-H, src:"測定幅-1.0H"}];
+  [1.272,1.618,2.0,2.618].forEach(r=>c.push({level:w.lo-r*H, src:"フィボ"+r}));
+  niceRoundDown(Math.min(w.lo,p), 3).forEach(lv=>c.push({level:lv, src:"ラウンド"}));
+  const lvl=levelCache[w.sym];
+  if(lvl) lvl.supports.filter(s=>s<p*0.998&&s>0).slice(0,3).forEach(s=>c.push({level:s, src:"4hスイング安値"}));
+  return mergeLadder(c.filter(x=>x.level>0&&x.level<p*0.998), true);
+}
+function mergeLadder(cands, desc){
+  cands.sort((a,b)=>desc?(b.level-a.level):(a.level-b.level));
   const merged=[];
-  for(const c of above){
-    const near=merged.find(m=>Math.abs(m.level-c.level)/c.level<0.005);
-    if(near) near.sources.push(c.source);
-    else merged.push({level:c.level, sources:[c.source]});
+  for(const x of cands){
+    const near=merged.find(m=>Math.abs(m.level-x.level)/x.level<0.005);
+    if(near){ if(!near.srcs.includes(x.src)) near.srcs.push(x.src); }
+    else merged.push({level:x.level, srcs:[x.src]});
   }
-  return merged;
+  return merged.slice(0,4);
 }
 
-// ---------- レンジ描画・15分ごと記録 ----------
-async function renderRanges(){
-  if(!ranges.length){
-    $('rangesList').innerHTML='<p class="small">監視レンジなし。上のフォームから追加してください。</p>';
-    return;
+// ―― 壁アタック集計(実体か髭かを分けてカウント) ――
+function analyzeWallAttacks(candles, lo, hi){
+  const hiThresh = hi*(1-ATTACK_TOUCH_PCT/100);
+  const loThresh = lo*(1+ATTACK_TOUCH_PCT/100);
+  let hiWick=0, hiBody=0, loWick=0, loBody=0;
+  for(const c of candles){
+    if(c.h >= hiThresh){ if(c.c > hi) hiBody++; else hiWick++; }
+    if(c.l <= loThresh){ if(c.c < lo) loBody++; else loWick++; }
   }
-  const rows=await Promise.all(ranges.map(async (r,idx)=>{
-    let price=null, dailyHigh=null;
-    try{ price=await bingxPrice(r.asset); }catch(e){}
+  return {hiTotal:hiWick+hiBody, hiWick, hiBody, loTotal:loWick+loBody, loWick, loBody};
+}
+
+// ―― ローソク足ミニチャート(SVG)―― 実体=太い箱/髭=細い線。アタック箇所に●を付ける
+function svgCandleStrip(candles, lo, hi){
+  if(!candles || candles.length===0) return '<div class="detail-loading">データなし</div>';
+  const step=10, bodyW=6, height=132, padTop=16, padBot=16;
+  const w = candles.length*step + 8;
+  const highs=candles.map(c=>c.h), lows=candles.map(c=>c.l);
+  const priceMax = Math.max(Math.max(...highs), hi)*1.004;
+  const priceMin = Math.min(Math.min(...lows), lo)*0.996;
+  const range = (priceMax-priceMin)||1;
+  const y = p => padTop + (height-padTop-padBot) * (1-(p-priceMin)/range);
+  const hiThresh = hi*(1-ATTACK_TOUCH_PCT/100);
+  const loThresh = lo*(1+ATTACK_TOUCH_PCT/100);
+
+  let bodies="", wicks="", markers="";
+  candles.forEach((c,i)=>{
+    const x = 4 + i*step + step/2;
+    const up = c.c >= c.o;
+    const color = up ? "#3ecb78" : "#e8504a";
+    wicks += `<line x1="${x}" y1="${y(c.h)}" x2="${x}" y2="${y(c.l)}" stroke="${color}" stroke-width="1.2"/>`;
+    const yTop=y(Math.max(c.o,c.c)), yBot=y(Math.min(c.o,c.c));
+    const bh=Math.max(1.2, yBot-yTop);
+    bodies += `<rect x="${x-bodyW/2}" y="${yTop}" width="${bodyW}" height="${bh}" fill="${color}" rx="1"/>`;
+    // 壁アタックのマーカー(実体突破=塗り/髭のみ=中抜き)
+    if(c.h >= hiThresh){
+      const filled = c.c > hi;
+      markers += `<circle cx="${x}" cy="${y(c.h)-6}" r="3" fill="${filled?'#e8504a':'none'}" stroke="#e8504a" stroke-width="1.4"/>`;
+    }
+    if(c.l <= loThresh){
+      const filled = c.c < lo;
+      markers += `<circle cx="${x}" cy="${y(c.l)+6}" r="3" fill="${filled?'#3ecb78':'none'}" stroke="#3ecb78" stroke-width="1.4"/>`;
+    }
+  });
+  const hiLine = `<line x1="0" y1="${y(hi)}" x2="${w}" y2="${y(hi)}" stroke="#e8504a" stroke-width="1" stroke-dasharray="3,3" opacity=".6"/>`;
+  const loLine = `<line x1="0" y1="${y(lo)}" x2="${w}" y2="${y(lo)}" stroke="#3ecb78" stroke-width="1" stroke-dasharray="3,3" opacity=".6"/>`;
+  return `<svg width="${w}" height="${height}" viewBox="0 0 ${w} ${height}" style="display:block">${hiLine}${loLine}${wicks}${bodies}${markers}</svg>`;
+}
+
+// ―― 詳細パネルの開閉 ――
+async function toggleDetail(id){
+  detailOpen[id] = !detailOpen[id];
+  if(detailOpen[id] && !detailTf[id]) detailTf[id]="4h";
+  render();
+  if(detailOpen[id]){
+    const w = watches.find(x=>x.id===id);
+    if(w) await loadDetailCandles(w);
+  }
+}
+async function setDetailTf(id, tf){
+  detailTf[id]=tf;
+  const w = watches.find(x=>x.id===id);
+  render();
+  if(w) await loadDetailCandles(w);
+}
+async function loadDetailCandles(w){
+  detailLoading[w.id]=true; render();
+  await fetchCandles(w, detailTf[w.id]||"4h", CANDLE_COUNT);
+  detailLoading[w.id]=false; render();
+}
+
+// ―― ティッカー取得 ――
+let lastFetchTime = 0;
+async function fetchAllTickers(){
+  if (Date.now()-lastFetchTime<5000 && Object.keys(tickerCache).length>0) return;
+  try{
+    const res=await fetch(TICKER_API);
+    const json=await res.json();
+    const data=(json.result&&json.result.data)||json.data||[];
+    data.forEach(t=>{
+      const key=t.instrument_name||t.i;
+      if(key){t.last=t.last||t.a;t.change=t.change||t.c;t.high=t.high||t.h;t.low=t.low||t.l;tickerCache[key]=t}
+    });
+    lastFetchTime=Date.now();
+  }catch(e){}
+}
+function resolveInst(sym){
+  const tryInsts=[sym+"_USDT",sym+"USD",sym+"_USD",sym+"USDT",sym+"USDPERP"];
+  for(const t of tryInsts){ if(tickerCache[t]) return t; }
+  return tryInsts[0];
+}
+function mkWatch(sym, lo, hi, created){
+  return {id:Date.now()+Math.floor(Math.random()*1000), sym, inst:resolveInst(sym),
+          lo, hi, price:null, change:0, _state:"safe", nextR:null, nextS:null,
+          created:created||new Date().toISOString()};
+}
+
+// ―― プリセット追加 ――
+async function addPreset(sym){
+  const btn=document.getElementById("pre-"+sym);
+  if(btn){btn.classList.add("loading");btn.textContent=sym+"…"}
+  if(watches.find(w=>w.sym===sym)){if(btn){btn.textContent="✓ "+sym;btn.classList.remove("loading")}return}
+  await fetchAllTickers();
+  const preset=PRESET_COINS.find(p=>p.sym===sym);
+  let ticker=null,instName=null;
+  for(const inst of preset.insts){if(tickerCache[inst]){ticker=tickerCache[inst];instName=inst;break}}
+  if(!ticker){if(btn){btn.textContent="✗ "+sym;btn.classList.remove("loading")}return}
+  const lo=parseFloat(ticker.low||0);
+  const hi=parseFloat(ticker.high||0);
+  const last=parseFloat(ticker.last||0);
+  const change=parseFloat(ticker.change||0)*100;
+  const useLo=(lo&&hi&&lo<hi)?lo:last*0.985;
+  const useHi=(lo&&hi&&lo<hi)?hi:last*1.015;
+  const w=mkWatch(sym, useLo, useHi);
+  w.inst=instName; w.price=last; w.change=change;
+  watches.push(w);
+  save();render();queueSync();
+  fetchLevels(w).then(lvl=>{
+    if(lvl){w.nextR=getNextResistance(lvl,last);w.nextS=getNextSupport(lvl,last);save();render()}
+  });
+  if(btn){btn.textContent="✓ "+sym;btn.classList.remove("loading")}
+}
+
+// ―― 手動追加 ――
+function addWatch(){
+  let sym=document.getElementById("in-sym").value.trim().toUpperCase();
+  let lo=parseFloat(document.getElementById("in-lo").value);
+  let hi=parseFloat(document.getElementById("in-hi").value);
+  if(!sym){alert("銘柄を入力してください");return}
+  if(isNaN(lo)||isNaN(hi)){alert("下限・上限を入力してください");return}
+  if(lo>=hi){alert("下限は上限より小さくしてください");return}
+  const w=mkWatch(sym, lo, hi);
+  watches.push(w);
+  save();
+  document.getElementById("in-sym").value="";
+  document.getElementById("in-lo").value="";
+  document.getElementById("in-hi").value="";
+  render();poll();queueSync();
+  fetchLevels(w).then(lvl=>{
+    if(lvl&&w.price){w.nextR=getNextResistance(lvl,w.price);w.nextS=getNextSupport(lvl,w.price);save();render()}
+  });
+}
+function delWatch(id){
+  watches=watches.filter(w=>w.id!==id);
+  delete lastAlertState[id]; delete lastSubState[id];
+  save();render();queueSync();
+}
+function showMsg(text,ok){
+  const m=document.getElementById("addMsg");
+  m.textContent=text; m.className="msg show "+(ok?"ok":"err");
+}
+
+// ―― 30日高安を手動フォームに入力 ――
+async function suggest30d(){
+  const sym=document.getElementById("in-sym").value.trim().toUpperCase();
+  if(!sym){showMsg("先に銘柄を入力してください",false);return}
+  const btn=document.getElementById("suggestBtn");
+  btn.disabled=true;btn.textContent="取得中…";
+  try{
+    const s=await suggestRangeFor(sym);
+    if(!s){showMsg("価格データを取得できませんでした("+sym+")",false);}
+    else{
+      document.getElementById("in-lo").value=s.lower;
+      document.getElementById("in-hi").value=s.upper;
+      showMsg("直近30日の高安値を入力しました(必要なら調整してください)",true);
+    }
+  }catch(e){showMsg("取得失敗: "+e.message,false);}
+  btn.disabled=false;btn.textContent="30日高安を入力";
+}
+
+// ―― 保有銘柄の一括追加(holdings.json → 30日高安レンジで登録) ――
+async function bulkAddHoldings(){
+  if(!cfg.token){showMsg("先にGitHub連携を設定してください(上の⚙パネル)",false);document.getElementById("cfgBox").open=true;return}
+  const btn=document.getElementById("bulkBtn");
+  btn.disabled=true;
+  if(!holdingsCache.length) await loadHoldings();
+  const targets=holdingsCache.filter(h=>!watches.find(w=>w.sym===h));
+  if(!targets.length){showMsg("追加対象なし(保有銘柄はすべて監視中)",true);btn.disabled=false;btn.textContent="📦 保有銘柄を一括追加(30日高安レンジ)";return}
+  await fetchAllTickers().catch(()=>{});
+  const added=[];
+  for(let i=0;i<targets.length;i++){
+    btn.textContent=`📦 取得中… ${i+1}/${targets.length}`;
     try{
-      const d=await bingxDaily(r.asset, 30);
-      if(d.length) dailyHigh=Math.max(...d.map(c=>c.h));
-    }catch(e){}
-    const flow=spotFlow[r.asset]||{};
-    const posInRange=isFinite(price)?(price-r.lower)/(r.upper-r.lower):null;
-    const durationMin=Math.round((Date.now()-new Date(r.created_ts).getTime())/60000);
-    const breakout=isFinite(price)&&price>r.upper*1.003;
-    const waveEntry=waveAssets.find(a=>a.asset===r.asset);
-    const ladder=breakout?buildLadder(r, price, dailyHigh, waveEntry?.wave3_targets):[];
-    const weak=breakout&&flow.net_flow_direction==='selling';
-    return {r, idx, price, posInRange, durationMin, flow, breakout, ladder, weak};
-  }));
-
-  $('rangesList').innerHTML=rows.map(({r,idx,price,posInRange,durationMin,flow,breakout,ladder,weak})=>{
-    const barW=posInRange!=null?Math.min(100,Math.max(0,posInRange*100)):0;
-    return `<div class="card">
-      <h3>${r.asset} <span class="small">[${r.lower} 〜 ${r.upper}]</span>
-        <button class="ghost small" style="float:right" onclick="removeRange(${idx})">削除</button></h3>
-      <div class="mono" style="font-size:18px">${price!=null?'$'+price:'—'}</div>
-      <div class="range-bar"><div style="width:${barW}%"></div></div>
-      <div class="small">レンジ内位置 ${posInRange!=null?(posInRange*100).toFixed(0)+'%':'—'}
-        / 経過${durationMin}分</div>
-      <div class="small">Taker買${flow.taker_buy?.toLocaleString()??'—'} / 売${flow.taker_sell?.toLocaleString()??'—'}
-        / ${flow.net_flow_direction??'—'}</div>
-      ${breakout?`<div class="small warn" style="margin-top:6px">
-        ⚠ 上限+0.3%ブレイク確定 ${weak?'(売り優勢=ダマシ警戒 weak_breakout)':''}</div>
-        ${ladder.map(l=>`<div class="ladder-row"><span class="mono">$${l.level.toFixed(6)}</span>
-          <span class="small">${l.sources.join('・')}</span></div>`).join('')}`
-        :''}
-    </div>`;
-  }).join('');
+      const s=await suggestRangeFor(targets[i]);
+      if(s&&s.lower<s.upper){
+        const w=mkWatch(targets[i], s.lower, s.upper);
+        watches.push(w); added.push(targets[i]);
+        fetchLevels(w).then(lvl=>{
+          if(lvl&&w.price){w.nextR=getNextResistance(lvl,w.price);w.nextS=getNextSupport(lvl,w.price);save();render()}
+        });
+      }
+    }catch(e){ /* 個別失敗はスキップして継続 */ }
+  }
+  save();render();poll();queueSync();
+  showMsg(added.length?`${added.length}銘柄を追加しました(${added.join("、")})`:"価格データを取得できませんでした",added.length>0);
+  btn.disabled=false;btn.textContent="📦 保有銘柄を一括追加(30日高安レンジ)";
 }
 
-async function appendRangeLog(){
-  if(!cfg.token || !ranges.length) return;
-  const now=new Date();
-  const dateStr=now.toISOString().slice(0,10);
-  const activeRanges=[];
-  for(const r of ranges){
-    let price=null;
-    try{ price=await bingxPrice(r.asset); }catch(e){ continue; }
-    if(!isFinite(price)) continue;
-    const flow=spotFlow[r.asset]||{};
-    activeRanges.push({
-      asset:r.asset, lower:r.lower, upper:r.upper, current_price:price,
-      position_in_range:Number(((price-r.lower)/(r.upper-r.lower)).toFixed(4)),
-      duration_minutes:Math.round((now-new Date(r.created_ts))/60000),
-      spot_taker_buy:flow.taker_buy??null, spot_taker_sell:flow.taker_sell??null,
-      net_flow_direction:flow.net_flow_direction??'neutral',
+// ―― 価格更新(Crypto.com優先、無い銘柄はBingXフォールバック) ――
+async function poll(){
+  if(watches.length===0){setFeed("監視なし",false);return}
+  try{
+    await fetchAllTickers();
+    for(const w of watches){
+      const t=tickerCache[w.inst];
+      if(t){
+        const last=parseFloat(t.last||0);
+        const chg=parseFloat(t.change||0)*100;
+        if(last>0){w.price=last;w.change=chg;checkAlert(w)}
+      }else if(Date.now()-(w._bxTs||0)>20000){
+        w._bxTs=Date.now();
+        bingxTicker(w.sym).then(r=>{
+          if(r&&r.price>0){w.price=r.price;w.change=r.chg;checkAlert(w);save();render()}
+        }).catch(()=>{});
+      }
+    }
+    save();render();setFeed("ライブ",true);
+    for(const w of watches){
+      if(detailOpen[w.id]) maybeRefreshDetail(w);
+    }
+  }catch(e){setFeed("接続エラー",false)}
+}
+async function maybeRefreshDetail(w){
+  const tf = detailTf[w.id]||"4h";
+  const key = w.sym+"|"+tf;
+  const cached = candleCache[key];
+  if(cached && Date.now()-cached.ts < 300000) return;
+  await loadDetailCandles(w);
+}
+function setFeed(txt,live){const f=document.getElementById("feed");f.textContent=live?"● "+txt:txt;f.className=live?"live":""}
+
+// ―― アラート判定(レンジ抜け・リテスト・ダマシ/強シグナル対応) ――
+function checkAlert(w){
+  if(w.price==null)return;
+  const p=w.price;
+  const prevBroke=w._broke;
+  // ブレイク方向を記憶(枠外に出たら記録)
+  if(p>w.hi*1.002) w._broke="up";
+  else if(p<w.lo*0.998) w._broke="down";
+  // 新規ブレイク(方向が変わった/新たに発生)ならリテスト回数をリセット
+  if(w._broke && w._broke!==prevBroke){ w._retestCount=0; w._inRetestZone=false; }
+
+  const distLoPct=(p-w.lo)/w.lo*100;
+  const distHiPct=(w.hi-p)/w.hi*100;
+  // リテスト圏(ブレイク後、旧境界の±RETEST_PCT以内へ戻ってきた)
+  const retestUp   = w._broke==="up"   && Math.abs(p-w.hi)/w.hi*100 <= RETEST_PCT;
+  const retestDown = w._broke==="down" && Math.abs(p-w.lo)/w.lo*100 <= RETEST_PCT;
+  // 圏外→圏内に入った瞬間だけカウント(居座り中や往復では増えない)
+  const inRetestZone = retestUp || retestDown;
+  if(inRetestZone && !w._inRetestZone){ w._retestCount=(w._retestCount||0)+1; }
+  w._inRetestZone = inRetestZone;
+
+  let state="safe";
+  if(p>w.hi*1.002) state="breakout-up";
+  else if(p<w.lo*0.998) state="breakout-down";
+  else if(retestUp) state="retest-up";
+  else if(retestDown) state="retest-down";
+  else if(p<=w.lo) state="hit-lo";
+  else if(p>=w.hi) state="hit-hi";
+  else if(distLoPct<=NEAR_PCT) state="near-lo";
+  else if(distHiPct<=NEAR_PCT) state="near-hi";
+
+  // ブレイク失敗(境界からFAIL_PCT逆行してレンジ内へ戻ったら記憶リセット)
+  if(w._broke==="up"   && p < w.hi*(1-FAIL_PCT/100)){ w._broke=null; w._retestCount=0; w._inRetestZone=false; }
+  if(w._broke==="down" && p > w.lo*(1+FAIL_PCT/100)){ w._broke=null; w._retestCount=0; w._inRetestZone=false; }
+
+  // ブレイクアウト時にレベル更新
+  if((state==="breakout-up"||state==="breakout-down") && lastAlertState[w.id]!==state){
+    fetchLevels(w).then(lvl=>{
+      if(lvl){w.nextR=getNextResistance(lvl,w.price);w.nextS=getNextSupport(lvl,w.price);save();render()}
     });
   }
-  const record={timestamp:now.toISOString(), active_ranges:activeRanges};
-  const path=`logs/range/${dateStr}.json`;
-  try{
-    if(dailyLogDate!==dateStr){
-      const existing=await ghGetFile(path);
-      dailyLogText=existing.notFound?'':existing.text;
-      dailyLogSha=existing.notFound?null:existing.sha;
-      dailyLogDate=dateStr;
-    }
-    const newText=(dailyLogText && !dailyLogText.endsWith('\n')?dailyLogText+'\n':dailyLogText)
-      + JSON.stringify(record)+'\n';
-    dailyLogSha=await ghPutFile(path, newText, 'range log append', dailyLogSha);
-    dailyLogText=newText;
-    await writeLatestRangeLog(record);
-  }catch(e){ fail('range log書き込み',e); }
-}
+  if(state!=="safe"&&lastAlertState[w.id]!==state) fireAlert(w,state);
+  lastAlertState[w.id]=state;
+  w._state=state;
 
-async function writeLatestRangeLog(record){
-  const text=JSON.stringify(record,null,1)+'\n';
-  try{
-    if(latestLogSha===null){
-      const existing=await ghGetFile('logs/range/latest.json');
-      latestLogSha=existing.notFound?null:existing.sha;
+  // ―― 現物フロー×OIによるブレイク質判定(上抜け時のみ) ――
+  let sub=null;
+  if(state==="breakout-up"){
+    const flow=spotFlow[w.sym], og=cgSignals[w.sym];
+    if(flow){
+      if(flow.net_flow_direction==="selling") sub="weak";
+      else if(flow.net_flow_direction==="buying" && og && og.oi_chg_pct_24h!=null && og.oi_chg_pct_24h<0) sub="strong";
     }
-    latestLogSha=await ghPutFile('logs/range/latest.json', text, 'range latest', latestLogSha);
-  }catch(e){
-    // SHA不整合などで失敗した場合は最新SHAを取り直して1回だけ再試行
-    const existing=await ghGetFile('logs/range/latest.json');
-    latestLogSha=await ghPutFile('logs/range/latest.json', text, 'range latest',
-      existing.notFound?null:existing.sha);
   }
+  w._sub=sub;
+  const subKey=state+"|"+(sub||"");
+  if(sub && lastSubState[w.id]!==subKey) fireSubAlert(w,sub);
+  lastSubState[w.id]=subKey;
 }
 
-// ---------- 設定 ----------
-$('cfgSave').onclick=async ()=>{
-  cfg={owner:$('cfgOwner').value.trim(), repo:$('cfgRepo').value.trim(),
-       branch:$('cfgBranch').value.trim()||'main', token:$('cfgToken').value.trim()};
-  localStorage.setItem(CFG_LS, JSON.stringify(cfg));
-  await loadAll();
-};
-
-// ---------- 初期化 ----------
-let tickTimer=null;
-async function loadAll(){
-  errs.length=0; $('errBox').textContent='';
-  $('upd').textContent='読み込み中…';
-  await Promise.all([loadRangeWatch(), loadSpotFlow(), loadWaveData(), loadHoldings()]);
-  renderWaveDashboard();
-  await renderRanges();
-  const d=new Date(Date.now()+9*3600*1000);
-  $('upd').textContent=`${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')} JST 更新`;
-  if(tickTimer) clearInterval(tickTimer);
-  if(cfg.token) tickTimer=setInterval(appendRangeLog, 15*60*1000);
+function fireAlert(w,state){
+  let msg="";
+  if(state==="hit-lo") msg=w.sym+" が下限に到達!";
+  else if(state==="hit-hi") msg=w.sym+" が上限に到達!";
+  else if(state==="near-lo") msg=w.sym+" 下限に接近中";
+  else if(state==="near-hi") msg=w.sym+" 上限に接近中";
+  else if(state==="breakout-up") msg="🚀 "+w.sym+" レンジ上抜け!次の壁: $"+(w.nextR?fmt(w.nextR):"計算中");
+  else if(state==="breakout-down") msg="📉 "+w.sym+" レンジ下抜け!サポート: $"+(w.nextS?fmt(w.nextS):"計算中");
+  else if(state==="retest-up") msg="⭐ "+w.sym+" 旧レジ $"+fmt(w.hi)+" をリテスト中 "+(w._retestCount||1)+"回目(保てば継続!)";
+  else if(state==="retest-down") msg="⭐ "+w.sym+" 旧サポ $"+fmt(w.lo)+" をリテスト中 "+(w._retestCount||1)+"回目(戻れば継続!)";
+  if(typeof Notification!=="undefined"&&Notification.permission==="granted") new Notification("レンジ監視",{body:msg});
+  if(soundOn) beep(state.startsWith("breakout")?1100:state.startsWith("retest")?990:state.startsWith("hit")?880:560);
+  showToast(msg);
+  addLog(msg);
+  speak(w, state);
 }
-$('reload').onclick=loadAll;
-fillCfg();
-if(!cfg.token) $('cfgBox').open=true;
-loadAll();
+
+// ―― ダマシ警戒 / 強シグナルの特別通知 ――
+function fireSubAlert(w,sub){
+  const og=cgSignals[w.sym];
+  let msg;
+  if(sub==="weak"){
+    msg="⚠ "+w.sym+" 上抜けだが現物は売り越し — ダマシ警戒(weak_breakout)";
+  }else{
+    const oiTxt=og&&og.oi_chg_pct_24h!=null?("OI"+og.oi_chg_pct_24h+"%"):"OI減少";
+    msg="💪 "+w.sym+" 強シグナル!上抜け+現物買い流入+"+oiTxt+"(現物主導)";
+  }
+  if(typeof Notification!=="undefined"&&Notification.permission==="granted") new Notification("レンジ監視",{body:msg});
+  if(soundOn) beep(sub==="strong"?1320:740);
+  showToast(msg, sub==="strong"?"strong":"warn2", sub==="strong"?10000:8000);
+  addLog(msg);
+  if(voiceOn) speakText(w.sym.split("").join(" ")+"、"+(sub==="strong"?"強シグナル、現物買いで上抜け":"上抜けはダマシ警戒"));
+}
+
+// ―― トースト(鳴った瞬間に画面上部へ表示。既定6秒で消える) ――
+function showToast(msg, cls, ms){
+  const box=document.getElementById("toastBox");
+  const el=document.createElement("div");
+  el.className="toast"+(cls?" "+cls:"");
+  el.innerHTML=msg+`<span class="t-time">${new Date().toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"})}</span>`;
+  box.appendChild(el);
+  while(box.children.length>3) box.removeChild(box.firstChild);
+  setTimeout(()=>{ el.classList.add("out"); setTimeout(()=>el.remove(),450); }, ms||6000);
+}
+
+// ―― アラート履歴(localStorageに最大50件保存。開き直しても残る) ――
+let alertLog=[];
+let logUnread=0;
+let logVisible=false;
+function loadLog(){
+  try{ alertLog=JSON.parse(localStorage.getItem("range_alerts_log")||"[]"); }catch(e){ alertLog=[]; }
+  renderLog();
+}
+function saveLog(){
+  try{ localStorage.setItem("range_alerts_log", JSON.stringify(alertLog.slice(0,50))); }catch(e){}
+}
+function addLog(msg){
+  alertLog.unshift({t:Date.now(), msg});
+  alertLog=alertLog.slice(0,50);
+  saveLog();
+  if(!logVisible){ logUnread++; }
+  renderLog();
+}
+function renderLog(){
+  const body=document.getElementById("logBody");
+  const badge=document.getElementById("logBadge");
+  if(logUnread>0){ badge.style.display="inline-block"; badge.textContent=logUnread; }
+  else badge.style.display="none";
+  if(alertLog.length===0){ body.innerHTML='<div class="log-empty">まだアラートはありません</div>'; return; }
+  const now=Date.now();
+  body.innerHTML=alertLog.map(e=>{
+    const d=new Date(e.t);
+    const time=(now-e.t<86400000)
+      ? d.toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"})
+      : (d.getMonth()+1)+"/"+d.getDate()+" "+d.toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"});
+    const fresh=now-e.t<3600000?" fresh":"";
+    return `<div class="log-row${fresh}"><span class="log-time">${time}</span><span class="log-msg">${e.msg}</span></div>`;
+  }).join("");
+}
+function toggleLog(){
+  logVisible=!logVisible;
+  document.getElementById("logBody").classList.toggle("hidden",!logVisible);
+  document.getElementById("logArrow").textContent=logVisible?"▲":"▼";
+  if(logVisible){ logUnread=0; renderLog(); }
+}
+function clearLog(){ alertLog=[]; logUnread=0; saveLog(); renderLog(); }
+
+// ―― 読み上げ(銘柄名とイベントを声で。画面を見てなくても分かる) ――
+let voiceOn=false;
+function toggleVoice(){
+  voiceOn=!voiceOn;
+  const b=document.getElementById("voiceBtn");
+  b.textContent=voiceOn?"🗣 読み上げ ON":"🗣 読み上げ OFF";
+  b.classList.toggle("on",voiceOn);
+  if(voiceOn) speakText("読み上げをオンにしました");
+}
+function speak(w,state){
+  if(!voiceOn) return;
+  const ev={"hit-lo":"下限到達","hit-hi":"上限到達","near-lo":"下限接近","near-hi":"上限接近",
+            "breakout-up":"上抜け","breakout-down":"下抜け",
+            "retest-up":"旧レジスタンスをリテスト"+(w._retestCount||1)+"回目",
+            "retest-down":"旧サポートをリテスト"+(w._retestCount||1)+"回目"}[state]||state;
+  speakText(w.sym.split("").join(" ")+"、"+ev);   // "S O L、上限到達" と読まれる
+}
+function speakText(text){
+  try{
+    if(typeof speechSynthesis==="undefined") return;
+    const u=new SpeechSynthesisUtterance(text);
+    u.lang="ja-JP"; u.rate=1.05;
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+
+let audioCtx;
+function beep(freq){try{audioCtx=audioCtx||new(window.AudioContext||window.webkitAudioContext)();const o=audioCtx.createOscillator();const g=audioCtx.createGain();o.connect(g);g.connect(audioCtx.destination);o.frequency.value=freq;o.type="sine";g.gain.setValueAtTime(.18,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.4);o.start();o.stop(audioCtx.currentTime+.4)}catch(e){}}
+
+// ―― 現物フロー表示用 ――
+function fmtVol(n){
+  if(n==null||!isFinite(n))return"—";
+  if(Math.abs(n)>=1e9)return(n/1e9).toFixed(2)+"B";
+  if(Math.abs(n)>=1e6)return(n/1e6).toFixed(2)+"M";
+  if(Math.abs(n)>=1e3)return(n/1e3).toFixed(1)+"K";
+  return n.toFixed(0);
+}
+function flowRowHtml(w){
+  const flow=spotFlow[w.sym], og=cgSignals[w.sym];
+  if(!flow&&!og){
+    // 連携済みなのにデータ未着 → 次のActionsスキャン待ちであることを示す
+    if(cfg.token&&rwLoaded) return `<div class="flow-row"><span>現物フロー: 未取得(15分毎のスキャン待ち)</span></div>`;
+    return "";
+  }
+  let left="";
+  if(flow){
+    const dir=flow.net_flow_direction;
+    const dirTxt=dir==="buying"?"買い越し":dir==="selling"?"売り越し":"中立";
+    const dirCls=dir==="buying"?"dir-buy":dir==="selling"?"dir-sell":"dir-neutral";
+    const stale=spotFlowTs&&(Date.now()/1000-spotFlowTs>7200)?" (古)":"";
+    left=`現物 <span class="${dirCls}">${dirTxt}</span> <span class="f-vals">買${fmtVol(flow.taker_buy)}/売${fmtVol(flow.taker_sell)}</span>${stale}`;
+  }else{
+    left=`現物フロー: 未取得`;
+  }
+  let right="";
+  if(og&&og.oi_chg_pct_24h!=null){
+    const v=og.oi_chg_pct_24h;
+    right=`<span class="oi-chg ${v<0?'dry':''}">OI24h ${v>0?"+":""}${v}%</span>`;
+  }
+  return `<div class="flow-row"><span>${left}</span>${right}</div>`;
+}
+
+// ―― 描画 ――
+function render(){
+  const list=document.getElementById("list");
+  if(watches.length===0){list.innerHTML='<div class="empty">監視中の銘柄はありません。<br>プリセット・一括追加・フォームから追加してください。</div>';return}
+  list.innerHTML=watches.map(w=>{
+    const span=w.hi-w.lo;
+    let pos=50,posTxt="—",priceTxt="取得中…";
+    let markerCls="mid",cardCls="",stateCls="safe",stateTxt="レンジ内";
+    let barLo=w.lo, barHi=w.hi, starPos=null, starActive=false;   // ズームバー / ⭐位置
+    if(w.price!=null){
+      const s=w._state||"safe";
+      priceTxt="$"+fmt(w.price);
+      // ブレイク方向が記録されていれば、旧境界の周辺にバーをズーム
+      if(w._broke==="up"){ barLo=w.hi*0.97; barHi=Math.max(w.price,w.hi)*1.02; starPos=(w.hi-barLo)/((barHi-barLo)||1)*100; }
+      else if(w._broke==="down"){ barLo=Math.min(w.price,w.lo)*0.98; barHi=w.lo*1.03; starPos=(w.lo-barLo)/((barHi-barLo)||1)*100; }
+      pos=Math.max(0,Math.min(100,(w.price-barLo)/((barHi-barLo)||1)*100));
+      posTxt = w._broke ? ("$"+fmt(w.price)) : (Math.max(0,Math.min(100,(w.price-w.lo)/(span||1)*100)).toFixed(0)+"%");
+      if(s==="hit-lo"){cardCls="alert-low";markerCls="lo";stateCls="hit-lo";stateTxt="▼ 下限到達"}
+      else if(s==="hit-hi"){cardCls="alert-high";markerCls="hi";stateCls="hit-hi";stateTxt="▲ 上限到達"}
+      else if(s==="near-lo"){cardCls="near";stateCls="near";stateTxt="下限に接近"}
+      else if(s==="near-hi"){cardCls="near";stateCls="near";stateTxt="上限に接近"}
+      else if(s==="breakout-up"){cardCls="breakout-up";markerCls="out-hi";stateCls="breakout-up";stateTxt="🚀 レンジ上抜け"}
+      else if(s==="breakout-down"){cardCls="breakout-down";markerCls="out-lo";stateCls="breakout-down";stateTxt="📉 レンジ下抜け"}
+      else if(s==="retest-up"){cardCls="retest";markerCls="hi";stateCls="retest";stateTxt="⭐ 旧レジをリテスト中 "+(w._retestCount||1)+"回目";starActive=true}
+      else if(s==="retest-down"){cardCls="retest";markerCls="lo";stateCls="retest";stateTxt="⭐ 旧サポをリテスト中 "+(w._retestCount||1)+"回目";starActive=true}
+    }
+    const chCls=w.change>=0?"up":"down";
+    const chTxt=(w.change>=0?"+":"")+w.change.toFixed(2)+"%";
+    // 抵抗帯/支持帯ラダー(ブレイク中のみ展開)
+    let ladderHtml="";
+    if(w._broke==="up"&&w.price!=null){
+      const rows=buildLadderUp(w);
+      if(rows.length){
+        ladderHtml=`<div class="ladder"><div class="ladder-title">抵抗帯ラダー(次のターゲット)</div>`+
+          rows.map(l=>{
+            const dist=((l.level-w.price)/w.price*100).toFixed(1);
+            return `<div class="ladder-row up"><span><span class="lv">$${fmt(l.level)}</span><span class="lv-dist">+${dist}%</span></span><span class="src">${l.srcs.join("・")}</span></div>`;
+          }).join("")+`</div>`;
+      }
+    }else if(w._broke==="down"&&w.price!=null){
+      const rows=buildLadderDown(w);
+      if(rows.length){
+        ladderHtml=`<div class="ladder"><div class="ladder-title">支持帯ラダー(次のターゲット)</div>`+
+          rows.map(l=>{
+            const dist=((w.price-l.level)/w.price*100).toFixed(1);
+            return `<div class="ladder-row down"><span><span class="lv">$${fmt(l.level)}</span><span class="lv-dist">-${dist}%</span></span><span class="src">${l.srcs.join("・")}</span></div>`;
+          }).join("")+`</div>`;
+      }
+    }
+    // リテスト行(ブレイク方向が記録されている間)
+    let retestHtml="";
+    if(w._broke==="up"&&w.price!=null){
+      const d=(w.price-w.hi)/w.hi*100;
+      const cnt=w._retestCount||0;
+      const cntBadge=cnt>0?`<span class="retest-count-badge">${cnt}回目</span>`:"";
+      retestHtml=`<div class="retest-row"><span class="tgt-label">⭐ リテスト位置(旧レジ)${cntBadge}</span><span class="tgt-price">$${fmt(w.hi)} (${d>=0?"+":""}${d.toFixed(1)}%)</span></div>`;
+    } else if(w._broke==="down"&&w.price!=null){
+      const d=(w.price-w.lo)/w.lo*100;
+      const cnt=w._retestCount||0;
+      const cntBadge=cnt>0?`<span class="retest-count-badge">${cnt}回目</span>`:"";
+      retestHtml=`<div class="retest-row"><span class="tgt-label">⭐ リテスト位置(旧サポ)${cntBadge}</span><span class="tgt-price">$${fmt(w.lo)} (${d>=0?"+":""}${d.toFixed(1)}%)</span></div>`;
+    }
+    // ダマシ警戒 / 強シグナル行(上抜け中のみ)
+    let sigHtml="";
+    if(w._state==="breakout-up"&&w._sub==="weak"){
+      sigHtml=`<div class="sig-row weak">⚠ ダマシ警戒 — 上抜けだが現物は売り越し(weak_breakout)</div>`;
+    }else if(w._state==="breakout-up"&&w._sub==="strong"){
+      const og=cgSignals[w.sym];
+      const oiTxt=og&&og.oi_chg_pct_24h!=null?`OI24h ${og.oi_chg_pct_24h}%`:"OI減少";
+      sigHtml=`<div class="sig-row strong">💪 強シグナル — 現物買い流入 + ${oiTxt}(現物主導の上抜け)</div>`;
+    }
+    // ズーム時のラベル(⭐は旧境界)
+    const loLabel = w._broke==="up" ? `⭐$${fmt(w.hi)}` : w._broke==="down" ? `$${fmt(w.nextS||barLo)}` : `$${fmt(w.lo)}`;
+    const hiLabel = w._broke==="up" ? `$${fmt(w.nextR||barHi)}` : w._broke==="down" ? `⭐$${fmt(w.lo)}` : `$${fmt(w.hi)}`;
+    const starEl = starPos!=null ? `<span class="marker-star ${starActive?"active":""}" style="left:${starPos}%">⭐</span>` : "";
+    return `
+    <div class="watch ${cardCls}">
+      <div class="w-head"><span class="w-sym">${w.sym}</span><span class="w-price">${priceTxt}</span></div>
+      <div class="w-meta">
+        <span>レンジ幅 ${span>0?(span/w.lo*100).toFixed(1):"—"}%</span>
+        <span class="w-change ${chCls}">24h ${chTxt}</span>
+      </div>
+      <div class="bar-wrap">
+        <div class="bar"><div class="bar-fill"></div>${starEl}<div class="marker ${markerCls}" style="left:${pos}%"></div></div>
+        <div class="bar-labels">
+          <span class="lo-l">${loLabel}</span>
+          <span class="pos-l">${posTxt}</span>
+          <span class="hi-l">${hiLabel}</span>
+        </div>
+      </div>
+      ${flowRowHtml(w)}
+      ${sigHtml}
+      ${retestHtml}
+      ${ladderHtml}
+      <button class="btn-detail ${detailOpen[w.id]?'on':''}" onclick="toggleDetail(${w.id})">${detailOpen[w.id]?'▲ 壁アタック分析を閉じる':'📊 壁アタック分析(実体/髭・回数)'}</button>
+      ${detailOpen[w.id] ? renderDetailPanel(w) : ''}
+      <div class="w-foot">
+        <span class="w-state ${stateCls}">${stateTxt}</span>
+        <button class="btn-del" onclick="delWatch(${w.id})">削除</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+// ―― 壁アタック詳細パネルの中身 ――
+function renderDetailPanel(w){
+  const tf = detailTf[w.id]||"4h";
+  const key = w.sym+"|"+tf;
+  const cached = candleCache[key];
+  if(detailLoading[w.id] || !cached){
+    return `<div class="detail-panel">
+      <div class="tf-select">${["1h","4h","1D"].map(t=>`<button class="tf-btn ${t===tf?'on':''}" onclick="setDetailTf(${w.id},'${t}')">${t}</button>`).join("")}</div>
+      <div class="detail-loading">読み込み中…</div>
+    </div>`;
+  }
+  const candles = cached.candles.slice(-CANDLE_COUNT);
+  const atk = analyzeWallAttacks(candles, w.lo, w.hi);
+  const svg = svgCandleStrip(candles, w.lo, w.hi);
+  return `<div class="detail-panel">
+    <div class="tf-select">${["1h","4h","1D"].map(t=>`<button class="tf-btn ${t===tf?'on':''}" onclick="setDetailTf(${w.id},'${t}')">${t}</button>`).join("")}</div>
+    <div class="attack-grid">
+      <div class="attack-box hi">
+        <div class="ab-label">上限アタック(直近${candles.length}本)</div>
+        <div class="ab-total">${atk.hiTotal}回</div>
+        <div class="ab-split">髭のみ反発 <span class="wick-n">${atk.hiWick}</span> / 実体突破 <span class="body-n">${atk.hiBody}</span></div>
+      </div>
+      <div class="attack-box lo">
+        <div class="ab-label">下限アタック(直近${candles.length}本)</div>
+        <div class="ab-total">${atk.loTotal}回</div>
+        <div class="ab-split">髭のみ反発 <span class="wick-n">${atk.loWick}</span> / 実体割れ <span class="body-n">${atk.loBody}</span></div>
+      </div>
+    </div>
+    <div class="candle-wrap">${svg}</div>
+    <div class="candle-legend">
+      <span><span class="leg-swatch" style="background:#3ecb78"></span>陽線の実体</span>
+      <span><span class="leg-swatch" style="background:#e8504a"></span>陰線の実体</span>
+      <span><span class="leg-wick"></span>髭(高値・安値)</span>
+      <span>●塗り=実体で突破/○中抜き=髭のみで反発</span>
+    </div>
+  </div>`;
+}
+
+function fmt(n){if(n==null)return"—";if(n>=1000)return n.toLocaleString("en-US",{maximumFractionDigits:1});if(n>=1)return n.toFixed(3);if(n>=0.001)return n.toFixed(5);return n.toPrecision(4)}
+
+function reqNotify(){
+  if(typeof Notification==="undefined"||!("Notification"in window)){alert("この環境では通知は非対応です。ブラウザで直接開くと使えます。");return}
+  Notification.requestPermission().then(p=>{if(p==="granted"){document.getElementById("notifyBtn").textContent="🔔 通知 ON";document.getElementById("notifyBtn").classList.add("on")}});
+}
+function toggleSound(){soundOn=!soundOn;const b=document.getElementById("soundBtn");b.textContent=soundOn?"🔊 音 ON":"🔊 音 OFF";b.classList.toggle("on",soundOn);if(soundOn)beep(660)}
+function tick(){document.getElementById("clock").textContent=new Date().toLocaleTimeString("ja-JP")}
+
+// ―― スキャナー(トレンド + 日足S/R接触の自動抽出) ――
+const SCAN_UNIVERSE = 36;    // 出来高上位をいくつ走査するか
+const SR_TOUCH_PCT = 2.0;    // 日足S/Rにこの%以内なら「接触」扱い
+const DAILY_MIN_BARS = 25;   // 日足がこれ未満なら判定しない
+const MIN_RR = 1.5;          // これ未満の予測RRは方向/RRを付けない
+const STOP_BUF = 0.015, BREAK_BUF = 0.003;   // レベル余白 / ブレイクトリガー余白
+let dailyCache = {};         // inst -> {a, ts}
+let scanResults = {};        // inst -> result(追加時に参照)
+let scanning = false;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+function sma(arr, n){ if(arr.length<n) return null; let s=0; for(let i=arr.length-n;i<arr.length;i++) s+=arr[i]; return s/n; }
+
+// ―― 波の構造:分散比 VR(k)=Var(k日)/(k×Var(1日)) → <1で反転(戻る)、>1で前進(続く) ――
+function varianceRatio(rets,k){
+  const n=rets.length;
+  if(n<k*3) return null;
+  const mean=rets.reduce((a,b)=>a+b,0)/n;
+  let v1=0; for(const r of rets) v1+=(r-mean)*(r-mean); v1/=(n-1);
+  if(v1<=0) return null;
+  const kr=[];
+  for(let i=0;i+k<=n;i++){ let s=0; for(let j=0;j<k;j++) s+=rets[i+j]; kr.push(s); }
+  if(kr.length<10) return null;
+  const km=kr.reduce((a,b)=>a+b,0)/kr.length;
+  let vk=0; for(const r of kr) vk+=(r-km)*(r-km); vk/=(kr.length-1);
+  return vk/(k*v1);
+}
+function structureScore(closes){
+  if(closes.length<60) return null;
+  const rets=[];
+  for(let i=1;i<closes.length;i++){ if(closes[i-1]>0&&closes[i]>0) rets.push(Math.log(closes[i]/closes[i-1])); }
+  const vrs=[2,4,8,16].map(k=>varianceRatio(rets,k)).filter(v=>v!=null&&v>0);
+  if(vrs.length<3) return null;
+  return Math.exp(vrs.reduce((a,v)=>a+Math.log(v),0)/vrs.length);   // ≈1ランダム / >1前進 / <1反転
+}
+// 波動の強さ:直近20日の平均日次振幅((高値-安値)/終値 %)=1往復あたりの取り幅
+function waveStrength(highs,lows,closes,n=20){
+  const m=Math.min(n,closes.length);
+  if(m<8) return null;
+  let s=0,cnt=0;
+  for(let i=closes.length-m;i<closes.length;i++){
+    if(closes[i]>0){ s+=(highs[i]-lows[i])/closes[i]*100; cnt++; }
+  }
+  return cnt?s/cnt:null;
+}
+
+// 出来高上位のUSDT建てをユニバースに(プリセットは必ず含める)
+function pickUniverse(){
+  const rows = Object.values(tickerCache).map(t=>({
+    inst: t.instrument_name||t.i,
+    vol: parseFloat(t.vv||t.v||0),
+    last: parseFloat(t.last||t.a||0)
+  })).filter(r=>r.inst && /_USDT$/.test(r.inst) && r.last>0 && r.vol>0);
+  rows.sort((a,b)=>b.vol-a.vol);
+  const set = new Set();
+  PRESET_COINS.forEach(p=>{ const u=p.insts.find(i=>/_USDT$/.test(i)); if(u&&tickerCache[u]) set.add(u); });
+  for(const r of rows){ if(set.size>=SCAN_UNIVERSE) break; set.add(r.inst); }
+  return [...set];
+}
+
+// 日足を取得して トレンド / 最寄りS・R / モメンタム を算出
+async function analyzeDaily(inst){
+  if(dailyCache[inst] && Date.now()-dailyCache[inst].ts < 1800000) return dailyCache[inst].a;
+  try{
+    const res = await fetch(KLINE_API+"?instrument_name="+inst+"&timeframe=1D&count=200");
+    const json = await res.json();
+    let data = (json.result&&json.result.data)||json.data||[];
+    if(data.length < DAILY_MIN_BARS) return null;
+    data.sort((a,b)=>new Date(a.timestamp||a.t)-new Date(b.timestamp||b.t));
+    const closes = data.map(d=>parseFloat(d.close||d.c));
+    const highs  = data.map(d=>parseFloat(d.high||d.h));
+    const lows   = data.map(d=>parseFloat(d.low||d.l));
+    const price = closes[closes.length-1];
+    if(!(price>0)) return null;
+    const s20=sma(closes,20), s50=sma(closes,50);
+    // トレンド判定
+    let trend="range";
+    if(s20&&s50){ if(price>s20&&s20>s50) trend="up"; else if(price<s20&&s20<s50) trend="down"; }
+    else if(s20){ if(price>s20*1.03) trend="up"; else if(price<s20*0.97) trend="down"; }
+    // モメンタム(直近10本の変化率)
+    const mom = closes.length>=11 ? (price-closes[closes.length-11])/closes[closes.length-11]*100 : 0;
+    // 日足スイングS/R
+    const resL = [...new Set(findSwingHighs(highs,3))].filter(x=>x>0).sort((a,b)=>a-b);
+    const supL = [...new Set(findSwingLows(lows,3))].filter(x=>x>0).sort((a,b)=>a-b);
+    const nearR = resL.filter(r=>r>=price*0.999).sort((a,b)=>a-b)[0] || null;   // 直上のレジ
+    const nearS = supL.filter(s=>s<=price*1.001).sort((a,b)=>b-a)[0] || null;   // 直下のサポ
+    const resAbove = resL.filter(r=>r>price*0.999).sort((a,b)=>a-b);            // 上のレジ(昇順)
+    const supBelow = supL.filter(s=>s<price*1.001).sort((a,b)=>b-a);            // 下のサポ(降順)
+    const rangeLo = supL.filter(s=>s<price).sort((a,b)=>b-a)[0] || price*0.97;   // 監視レンジ下限候補
+    const rangeHi = resL.filter(r=>r>price).sort((a,b)=>a-b)[0] || price*1.03;   // 監視レンジ上限候補
+    const distR = nearR ? (nearR-price)/price*100 : null;
+    const distS = nearS ? (price-nearS)/price*100 : null;
+    const sScore = structureScore(closes);                // <1 反転 / >1 前進
+    const wave = waveStrength(highs,lows,closes);         // 平均日次振幅%
+    const a = {price,trend,mom,nearR,nearS,resAbove,supBelow,distR,distS,rangeLo,rangeHi,sScore,wave};
+    dailyCache[inst] = {a, ts:Date.now()};
+    return a;
+  }catch(e){ return null; }
+}
+
+// セットアップ判定(方向 / IN・SL・TP / 予測RR)→ sr_scanと同一ロジック
+function buildSetup(a){
+  const price=a.price, trend=a.trend;
+  const R1=a.resAbove[0]||null, R2=a.resAbove[1]||null;
+  const S1=a.supBelow[0]||null, S2=a.supBelow[1]||null;
+  const touchR=a.distR!=null && a.distR<=SR_TOUCH_PCT;
+  const touchS=a.distS!=null && a.distS<=SR_TOUCH_PCT;
+  let setup,direction,level,levelName,entry,stop,target;
+  if(touchR&&trend==="up"&&R1){                       // ① レジ×↑ → ブレイクロング
+    setup="ブレイク狙い";direction="LONG";level=R1;levelName="レジ";
+    entry=R1*(1+BREAK_BUF);
+    stop=(S1&&S1<entry)?S1:R1*(1-STOP_BUF*2);
+    const rng=(S1&&S1<R1)?(R1-S1):R1*0.05;
+    target=R2?R2:entry+rng;
+  }else if(touchR&&R1){                               // ② レジ×レンジ/↓ → 反落ショート
+    setup="反落狙い";direction="SHORT";level=R1;levelName="レジ";
+    entry=Math.min(price,R1);
+    stop=R1*(1+STOP_BUF);
+    target=S1?S1:entry*(1-Math.max(a.distR||4,4)/100-0.03);
+  }else if(touchS&&trend==="down"&&S1){               // ③ サポ×↓ → 割れショート
+    setup="割れ狙い";direction="SHORT";level=S1;levelName="サポ";
+    entry=S1*(1-BREAK_BUF);
+    stop=(R1&&R1>entry)?R1:S1*(1+STOP_BUF*2);
+    const rng=(R1&&R1>S1)?(R1-S1):S1*0.05;
+    target=S2?S2:entry-rng;
+  }else if(touchS&&S1){                               // ④ サポ×レンジ/↑ → 反発ロング
+    setup="反発狙い";direction="LONG";level=S1;levelName="サポ";
+    entry=Math.max(price,S1);
+    stop=S1*(1-STOP_BUF);
+    target=R1?R1:entry*(1+Math.max(a.distS||4,4)/100+0.03);
+  }else return null;
+  if(![entry,stop,target].every(v=>v&&v>0)) return null;
+  let risk,reward;
+  if(direction==="LONG"){risk=entry-stop;reward=target-entry;}
+  else{risk=stop-entry;reward=entry-target;}
+  if(risk<=0||reward<=0) return null;
+  const rr=reward/risk;
+  if(rr<MIN_RR) return null;
+  return {setup,direction,level,levelName,dist:levelName==="レジ"?a.distR:a.distS,entry,stop,target,rr};
+}
+
+// ―― 反転力ランキング(反転しやすさ × 波動の取り幅 でレンジ反転向き銘柄を順位付) ――
+async function runRotScan(){
+  if(scanning) return;
+  scanning = true;
+  const btn = document.getElementById("rotBtn");
+  btn.classList.add("on");
+  await fetchAllTickers();
+  const universe = pickUniverse();
+  if(universe.length===0){
+    document.getElementById("scanResults").innerHTML='<div class="scan-empty">ティッカー取得待ち。数秒後にもう一度。</div>';
+    btn.textContent="🔄 反転力ランキング"; btn.classList.remove("on"); scanning=false; return;
+  }
+  const found = [];
+  for(let i=0;i<universe.length;i++){
+    btn.textContent=`🔄 判定中… ${i+1}/${universe.length}`;
+    const inst = universe[i];
+    const a = await analyzeDaily(inst);
+    if(a && a.sScore!=null && a.wave!=null){
+      // 反転力: VR<1ほど強い → 0..100 に変換(VR0.4→100, VR1.0→0)
+      const rotPower = Math.max(0, Math.min(100, (1 - a.sScore) / 0.6 * 100));
+      // 波動の強さ: 平均日次振幅% → 0..100(8%で満点)
+      const wavePower = Math.max(0, Math.min(100, a.wave / 8 * 100));
+      // レンジ適性 = 反転力 × 波動(片方ないと点が付かない幾何平均)
+      const fitScore = Math.sqrt(Math.max(rotPower,1) * Math.max(wavePower,1));
+      const r = {inst, sym:inst.replace("_USDT",""), rotPower, wavePower, fitScore, ...a};
+      found.push(r); scanResults[inst]=r;   // +監視 で使う分
+    }
+    await sleep(110);
+  }
+  found.sort((x,y)=>y.fitScore-x.fitScore);
+  renderRotResults(found.slice(0,15));
+  btn.textContent="🔄 再ランキング"; btn.classList.remove("on"); scanning=false;
+}
+
+function renderRotResults(list){
+  const box = document.getElementById("scanResults");
+  if(list.length===0){ box.innerHTML='<div class="scan-empty">判定できる銘柄がありませんでした(日足データ不足)。</div>'; return; }
+  const head = `<div class="scan-title"><span>🔄 レンジ反転の適性ランキング</span><span>反転力 × 波動幅</span></div>
+    <div class="rot-note">反転力 = 行き過ぎたら戻る性質の強さ。波動 = 1日の平均振れ幅(≒1往復の取り幅)。両方高い銘柄ほど「壁での逆張り・レンジ反転に向く」。低い銘柄は順張り向き。</div>`;
+  box.innerHTML = head + list.map((r,i)=>{
+    let fitTag, fitCls;
+    if(r.rotPower>=45 && r.wavePower>=30){ fitTag="反転向き"; fitCls="good"; }
+    else if(r.rotPower<15){ fitTag="順張り向き"; fitCls="bad"; }
+    else { fitTag="中間"; fitCls="mid"; }
+    const already = watches.find(w=>w.inst===r.inst);
+    return `<div class="rot-card ${i===0?"top1":""}">
+      <span class="rot-rank">${i+1}</span>
+      <div class="rot-main">
+        <div class="rot-head">
+          <span class="rot-sym">${r.sym}</span>
+          <span class="rot-price">$${fmt(r.price)}</span>
+          <span class="rot-fit ${fitCls}">${fitTag}</span>
+        </div>
+        <div class="rbar-row">
+          <span class="rbar-label">反転力</span>
+          <div class="rbar-track"><div class="rbar-fill rot" style="width:${r.rotPower.toFixed(0)}%"></div></div>
+          <span class="rbar-val">${r.rotPower.toFixed(0)}</span>
+        </div>
+        <div class="rbar-row">
+          <span class="rbar-label">波動</span>
+          <div class="rbar-track"><div class="rbar-fill wave" style="width:${r.wavePower.toFixed(0)}%"></div></div>
+          <span class="rbar-val">${r.wave.toFixed(1)}%/日</span>
+        </div>
+      </div>
+      <button class="sc-add ${already?"done":""}" id="scadd-${r.inst}" onclick="addFromScan('${r.inst}')">${already?"✓ 監視中":"+ 監視"}</button>
+    </div>`;
+  }).join("");
+}
+
+async function runScan(){
+  if(scanning) return;
+  scanning = true;
+  const btn = document.getElementById("scanBtn");
+  btn.classList.add("on");
+  await fetchAllTickers();
+  const universe = pickUniverse();
+  if(universe.length===0){
+    document.getElementById("scanResults").innerHTML='<div class="scan-empty">ティッカー取得待ち。数秒後にもう一度。</div>';
+    btn.textContent="🔍 トレンド / 日足S・R をスキャン"; btn.classList.remove("on"); scanning=false; return;
+  }
+  scanResults = {};
+  const found = [];
+  for(let i=0;i<universe.length;i++){
+    btn.textContent=`🔍 スキャン中… ${i+1}/${universe.length}`;
+    const inst = universe[i];
+    const a = await analyzeDaily(inst);
+    if(a){
+      const touchR = a.distR!=null && a.distR<=SR_TOUCH_PCT;
+      const touchS = a.distS!=null && a.distS<=SR_TOUCH_PCT;
+      const trending = a.trend!=="range";
+      if(touchR||touchS||trending){
+        const sym = inst.replace("_USDT","");
+        const setup = buildSetup(a);   // 方向 / IN・SL・TP / RR(条件未達ならnull)
+        const r = {inst,sym,touchR,touchS,trending,setup,...a};
+        found.push(r); scanResults[inst]=r;
+      }
+    }
+    await sleep(110);
+  }
+  // 並び順: 有効セットアップ(RR)が最優先→S/R接触→モメンタム
+  found.sort((x,y)=>{
+    const sx=(x.setup?2000+x.setup.rr*100:0)+((x.touchR||x.touchS)?1000:0)+Math.abs(x.mom);
+    const sy=(y.setup?2000+y.setup.rr*100:0)+((y.touchR||y.touchS)?1000:0)+Math.abs(y.mom);
+    return sy-sx;
+  });
+  renderScanResults(found.slice(0,15));
+  btn.textContent="🔍 再スキャン"; btn.classList.remove("on"); scanning=false;
+}
+
+function renderScanResults(list){
+  const box = document.getElementById("scanResults");
+  if(list.length===0){ box.innerHTML='<div class="scan-empty">条件に合う銘柄は見つかりませんでした。</div>'; return; }
+  const nSetup = list.filter(r=>r.setup).length;
+  const head = `<div class="scan-title"><span>候補 ${list.length} 件(方向/RR ${nSetup}件)</span><span>RR≥${MIN_RR} / 接触≤${SR_TOUCH_PCT}%</span></div>`;
+  box.innerHTML = head + list.map(r=>{
+    const s = r.setup;
+    const tags=[];
+    if(s) tags.push(`<span class="tag ${s.direction==="LONG"?"sup":"res"}">${s.setup}</span>`);
+    if(r.trend==="up")   tags.push('<span class="tag up">🔥↑</span>');
+    else if(r.trend==="down") tags.push('<span class="tag down">📉↓</span>');
+    if(r.sScore!=null){
+      if(r.sScore<=0.80) tags.push('<span class="tag" style="background:rgba(167,139,250,.14);color:#a78bfa">🔄反転型</span>');
+      else if(r.sScore>=1.25) tags.push('<span class="tag" style="background:rgba(91,156,246,.14);color:#5b9cf6">➡前進型</span>');
+    }
+    if(r.wave!=null) tags.push(`<span class="tag">波動${r.wave.toFixed(1)}%/日</span>`);
+    if(r.touchR) tags.push(`<span class="tag res">レジ+${r.distR.toFixed(1)}%</span>`);
+    if(r.touchS) tags.push(`<span class="tag sup">サポ-${r.distS.toFixed(1)}%</span>`);
+    if(tags.length===0) tags.push(`<span class="tag">mom ${r.mom>=0?"+":""}${r.mom.toFixed(1)}%</span>`);
+    const dirBadge = s?`<span class="sc-dir ${s.direction==="LONG"?"long":"short"}">${s.direction}</span>`:"";
+    const rrBadge  = s?`<span class="sc-rr">RR ${s.rr.toFixed(1)}</span>`:"";
+    let lvlLine="";
+    if(s){
+      const slp=(s.stop-s.entry)/s.entry*100, tpp=(s.target-s.entry)/s.entry*100;
+      lvlLine=`<div class="sc-levels">IN ${fmt(s.entry)} / SL ${fmt(s.stop)} (${slp>=0?"+":""}${slp.toFixed(1)}%) / TP ${fmt(s.target)} (${tpp>=0?"+":""}${tpp.toFixed(1)}%)</div>`;
+    }
+    const already = watches.find(w=>w.inst===r.inst);
+    const setupCls = s?` has-setup ${s.direction==="LONG"?"long":"short"}`:"";
+    return `<div class="scan-card${setupCls}">
+      <div class="sc-main">
+        <div class="sc-top">${dirBadge}<span class="sc-sym">${r.sym}</span><span class="sc-price">$${fmt(r.price)}</span>${rrBadge}</div>
+        <div class="sc-tags">${tags.join("")}</div>
+        ${lvlLine}
+      </div>
+      <button class="sc-add ${already?"done":""}" id="scadd-${r.inst}" onclick="addFromScan('${r.inst}')">${already?"✓ 監視中":"+ 監視"}</button>
+    </div>`;
+  }).join("");
+}
+
+// 候補から監視追加(レンジは日足のサポ〜レジ幅で自動セット)
+function addFromScan(inst){
+  const r = scanResults[inst];
+  if(!r) return;
+  if(watches.find(w=>w.inst===inst)) return;
+  const lo = (r.rangeLo && r.rangeLo<r.price) ? r.rangeLo : r.price*0.97;
+  const hi = (r.rangeHi && r.rangeHi>r.price) ? r.rangeHi : r.price*1.03;
+  const t = tickerCache[inst];
+  const change = t ? parseFloat(t.change||t.c||0)*100 : 0;
+  const w=mkWatch(r.sym, lo, hi);
+  w.inst=inst; w.price=r.price; w.change=change;
+  watches.push(w);
+  save(); render(); queueSync();
+  const b=document.getElementById("scadd-"+inst); if(b){b.textContent="✓ 監視中";b.classList.add("done")}
+  fetchLevels(w).then(lvl=>{
+    if(lvl){w.nextR=getNextResistance(lvl,w.price);w.nextS=getNextSupport(lvl,w.price);save();render()}
+  });
+}
+
+load();loadLog();renderPresets();render();fillCfg();
+initGh();
+poll();
+setInterval(poll,POLL_MS);setInterval(tick,1000);tick();
+setInterval(async()=>{ if(cfg.token){ await Promise.all([loadSpotFlow(),loadCoinglass()]); updateGhStatus(); render(); } }, GH_REFRESH_MS);
+if(typeof Notification!=="undefined"&&Notification.permission==="granted"){document.getElementById("notifyBtn").textContent="🔔 通知 ON";document.getElementById("notifyBtn").classList.add("on")}
 </script>
 </body>
 </html>
