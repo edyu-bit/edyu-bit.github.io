@@ -200,9 +200,11 @@ function renderPositions(data){
     +(liveOn?`<span class="small"> / 価格・損益: ライブ(${LIVE_MS/1000}秒毎)</span>`:'');
 
   $('positions').innerHTML=(data.positions||[]).map(p=>{
-    const liqW=Math.min(100,Math.max(5,100-p.liq_dist_pct*2));
-    const liqCol=p.liq_dist_pct<10?'var(--up)':p.liq_dist_pct<25?'var(--warn)':'var(--ok)';
-    const liqWarn=p.liq_dist_pct<10?'<span class="up"> ⚠</span>':'';
+    // liq_price=0はBingXが清算価格を返していない(クロス等) — 「清算目前」ではないので赤バーにしない
+    const hasLiq=p.liq_price>0;
+    const liqW=hasLiq?Math.min(100,Math.max(5,100-p.liq_dist_pct*2)):0;
+    const liqCol=hasLiq?(p.liq_dist_pct<10?'var(--up)':p.liq_dist_pct<25?'var(--warn)':'var(--ok)'):'transparent';
+    const liqWarn=(hasLiq&&p.liq_dist_pct<10)?'<span class="up"> ⚠</span>':'';
     return `<div class="pos">
       <div class="pos-head">
         <h3 class="mono">${p.base} <span class="side ${p.side}">${p.side}</span></h3>
@@ -216,8 +218,8 @@ function renderPositions(data){
         <div><span>証拠金</span><b class="mono">$${p.margin.toFixed(0)}</b></div>
         <div><span>エントリー</span><b class="mono">${fmtP(p.entry)}</b></div>
         <div><span>マーク</span><b class="mono">${fmtP(p.mark)}</b></div>
-        <div><span>清算価格</span><b class="mono">${fmtP(p.liq_price)}${liqWarn}</b></div>
-        <div><span>清算距離</span><b class="mono ${p.liq_dist_pct<10?'up':''}">${p.liq_dist_pct.toFixed(1)}%</b></div>
+        <div><span>清算価格</span><b class="mono">${hasLiq?fmtP(p.liq_price):'—'}${liqWarn}</b></div>
+        <div><span>清算距離</span><b class="mono ${hasLiq&&p.liq_dist_pct<10?'up':''}">${hasLiq?p.liq_dist_pct.toFixed(1)+'%':'—'}</b></div>
       </div>
       <div class="liq-bar"><div style="width:${liqW}%;background:${liqCol}"></div></div>
     </div>`;

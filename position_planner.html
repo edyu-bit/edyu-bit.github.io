@@ -552,9 +552,11 @@ function renderEvalTab(){
   $('evalList').innerHTML=positions.map(p=>{
     const rv=findReviewFor(p.base,p.side);
     const pl=findPlanFor(p.base,p.side);
+    // liq_price=0はBingXが清算価格を返していない(クロス等) — 「清算目前」ではないので赤バーにしない
+    const hasLiq=p.liq_price>0;
     const liq=p.liq_dist_pct||0;
-    const liqW=Math.min(100,Math.max(5,100-liq*2));
-    const liqCol=liq<10?'var(--up)':liq<25?'var(--warn)':'var(--ok)';
+    const liqW=hasLiq?Math.min(100,Math.max(5,100-liq*2)):0;
+    const liqCol=hasLiq?(liq<10?'var(--up)':liq<25?'var(--warn)':'var(--ok)'):'transparent';
     return `<div class="pos">
       <div class="pos-head">
         <h3 class="mono">${p.base} <span class="side ${p.side}">${p.side}</span>
@@ -567,7 +569,7 @@ function renderEvalTab(){
         <div><span>サイズ</span><b class="mono">$${Math.round(p.size_usd||0).toLocaleString()}</b></div>
         <div><span>エントリー</span><b class="mono">${fmtP(p.entry)}</b></div>
         <div><span>マーク</span><b class="mono">${fmtP(p.mark)}</b></div>
-        <div><span>清算距離</span><b class="mono">${(+liq).toFixed(1)}%</b></div>
+        <div><span>清算距離</span><b class="mono">${hasLiq?(+liq).toFixed(1)+'%':'—'}</b></div>
       </div>
       <div class="liq-bar"><div style="width:${liqW}%;background:${liqCol}"></div></div>
       ${rv?`<div class="reasons"><b>${rv.verdict}</b> [${rv.score}点] ${(rv.reasons||[]).join(' / ')}
