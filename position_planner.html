@@ -82,7 +82,8 @@ padding:8px;margin-top:6px}
 <body>
 <header>
   <h1>ポジション構築・計画 <span>POSITION PLANNER</span></h1>
-  <div><button class="ghost small" id="reload">更新</button> <span id="upd" class="mono small"></span></div>
+  <div><button class="small" id="quickRefresh" style="background:var(--accent);color:#0a0e14;border:none">⚡ 今すぐ更新</button>
+    <button class="ghost small" id="reload">更新</button> <span id="upd" class="mono small"></span></div>
 </header>
 
 <nav class="tabs">
@@ -232,7 +233,9 @@ padding:8px;margin-top:6px}
       <button class="ghost" id="cfgSave" type="button" style="margin-top:8px">設定を保存</button>
       <p class="small" style="margin-top:8px">
         両トークンとも<b>この端末のlocalStorageのみ</b>に保存(送信先はGitHub APIだけ)。<br>
-        level用トークンはContents:Readのみのfine-grainedトークンで十分です(positions_gh.htmlと共用可)。<br>
+        level用トークンはContents:Readで動作します(positions_gh.htmlと共用可)。
+        <b>⚡今すぐ更新</b>(BingX最新ポジションを約30秒で取得)を使う場合のみ
+        <b>Actions: Read and write</b> 権限の追加が必要です。<br>
         trade-plans用トークンは<b>trade-plansリポジトリ1つ + Contents(Read/Write)のみ</b>に絞って発行してください。
         levelリポジトリへの権限は含めないこと(漏洩時にトレードデータへ影響しないため)。
       </p>
@@ -307,13 +310,17 @@ function showMsgIn(id, text, ok){
 }
 function pnlClass(v){return v>0?'ok':v<0?'up':''}
 function pnlSign(v){return v>0?'+'+v.toFixed(2):v.toFixed(2)}
+function fmtP(n){if(!isFinite(n))return'—';const d=n>=1000?2:n>=1?4:n>=0.001?6:8;return String(parseFloat(n.toFixed(d)))}
 
 // ---------- load ----------
+let posTs=0;   // positions.jsonのタイムスタンプ(⚡更新の反映確認に使う)
 async function loadLevel(){
   if(!cfg.level.token){ positions=[]; reviews=[]; signals=[]; return; }
   try{
     const p=await ghGetFile(cfg.level,'positions.json');
-    positions=p.text?(JSON.parse(p.text).positions||[]):[];
+    const pj=p.text?JSON.parse(p.text):{};
+    positions=pj.positions||[];
+    posTs=pj.ts||0;
   }catch(e){ positions=[]; showMsgIn('buildMsg','positions.json読み込み失敗: '+e.message,false); }
   try{
     const r=await ghGetFile(cfg.level,'positions_review.json');
@@ -328,6 +335,50 @@ async function loadLevel(){
     const c=await ghGetFile(cfg.level,'coinglass_signals.json');
     cgSignals=c.text?(JSON.parse(c.text).signals||{}):{};
   }catch(e){ cgSignals={}; }
+}
+
+// ---------- ライブ価格(BingX公開API、キー不要) ----------
+// マーク価格を公開ティッカーで取り直し、PnL/ROE/清算距離/トリガー到達判定をライブ化する。
+// 処理タブは入力欄があるため自動再描画しない(評価・計画タブのみ)。
+const LIVE_MS=8000;
+let liveOn=false;
+async function bingxAllPrices(symbols){
+  try{
+    const r=await fetch('https://open-api.bingx.com/openApi/swap/v2/quote/ticker');
+    const j=await r.json();
+    if(Array.isArray(j?.data)){
+      const m={};
+      for(const t of j.data){const p=parseFloat(t.lastPrice??t.price);if(t.symbol&&p>0)m[t.symbol]=p;}
+      if(Object.keys(m).length) return m;
+    }
+  }catch(e){}
+  const m={};
+  for(const s of symbols){
+    try{
+      const r=await fetch('https://open-api.bingx.com/openApi/swap/v2/quote/price?symbol='+s);
+      const p=parseFloat((await r.json())?.data?.price);
+      if(p>0)m[s]=p;
+    }catch(e){}
+  }
+  return Object.keys(m).length?m:null;
+}
+async function liveTick(){
+  if(!positions.length) return;
+  const m=await bingxAllPrices(positions.map(p=>p.symbol));
+  if(!m) return;
+  let hit=0;
+  for(const p of positions){
+    const mark=m[p.symbol];
+    if(mark>0){
+      p.mark=mark;
+      p.pnl=(mark-p.entry)*p.size*(p.side==='LONG'?1:-1);
+      p.roe=p.margin>0?p.pnl/p.margin*100:0;
+      p.size_usd=p.size*mark;
+      p.liq_dist_pct=(p.liq_price>0)?Math.abs(mark-p.liq_price)/mark*100:p.liq_dist_pct;
+      hit++;
+    }
+  }
+  if(hit){liveOn=true;renderEvalTab();renderPlanTab();}
 }
 
 async function loadPlans(){
@@ -496,7 +547,7 @@ function renderEvalTab(){
   }
   const totalPnl=positions.reduce((s,p)=>s+(p.pnl||0),0);
   $('evalSum').innerHTML=`
-    <div><b class="mono ${pnlClass(totalPnl)}" style="font-size:20px">${pnlSign(totalPnl)} USDT</b><div class="small">合計含み損益</div></div>
+    <div><b class="mono ${pnlClass(totalPnl)}" style="font-size:20px">${pnlSign(totalPnl)} USDT</b><div class="small">合計含み損益${liveOn?' <span class="ok">●LIVE</span>':''}</div></div>
     <div><b class="mono" style="font-size:20px">${positions.length}</b><div class="small">ポジション数</div></div>`;
   $('evalList').innerHTML=positions.map(p=>{
     const rv=findReviewFor(p.base,p.side);
@@ -513,10 +564,10 @@ function renderEvalTab(){
       <div class="pos-grid">
         <div><span>ROE</span><b class="mono ${pnlClass(p.roe)}">${pnlSign(p.roe)}%</b></div>
         <div><span>レバレッジ</span><b class="mono">${p.leverage}x</b></div>
-        <div><span>サイズ</span><b class="mono">$${(p.size_usd||0).toLocaleString()}</b></div>
-        <div><span>エントリー</span><b class="mono">${p.entry}</b></div>
-        <div><span>マーク</span><b class="mono">${p.mark}</b></div>
-        <div><span>清算距離</span><b class="mono">${liq}%</b></div>
+        <div><span>サイズ</span><b class="mono">$${Math.round(p.size_usd||0).toLocaleString()}</b></div>
+        <div><span>エントリー</span><b class="mono">${fmtP(p.entry)}</b></div>
+        <div><span>マーク</span><b class="mono">${fmtP(p.mark)}</b></div>
+        <div><span>清算距離</span><b class="mono">${(+liq).toFixed(1)}%</b></div>
       </div>
       <div class="liq-bar"><div style="width:${liqW}%;background:${liqCol}"></div></div>
       ${rv?`<div class="reasons"><b>${rv.verdict}</b> [${rv.score}点] ${(rv.reasons||[]).join(' / ')}
@@ -562,7 +613,7 @@ function renderPlanTab(){
     return `<div class="pos">
       <div class="pos-head">
         <h3 class="mono">${pl.base} <span class="side ${pl.side}">${pl.side}</span></h3>
-        <span class="small">${live?('現在値 '+mark):'未エントリー(ライブポジなし)'}</span>
+        <span class="small">${live?('現在値 '+fmtP(mark)+(liveOn?' <span class="ok">●</span>':'')):'未エントリー(ライブポジなし)'}</span>
       </div>
       <div class="pos-grid">
         <div><span>エントリー(計画)</span><b class="mono">${pl.entry}</b></div>
@@ -708,10 +759,50 @@ async function loadAll(){
   const d=new Date(Date.now()+9*3600*1000);
   $('upd').textContent=`${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')} JST 更新`;
 }
+// ---------- ⚡今すぐ更新: positions_refresh.yml を起動して最新ポジションを取り込む ----------
+async function quickRefresh(){
+  const btn=$('quickRefresh');
+  if(!cfg.level.token){$('cfgBox').open=true;return;}
+  btn.disabled=true;btn.textContent='⚡ 起動中…';
+  const prevTs=posTs;
+  try{
+    const r=await fetch(
+      `https://api.github.com/repos/${cfg.level.owner}/${cfg.level.repo}/actions/workflows/positions_refresh.yml/dispatches`,
+      {method:'POST',
+       headers:{'Accept':'application/vnd.github+json','Authorization':'Bearer '+cfg.level.token,
+                'Content-Type':'application/json'},
+       body:JSON.stringify({ref:cfg.level.branch||'main'})});
+    if(r.status===403||r.status===404)
+      throw new Error('level用PATに「Actions: Read and write」権限が必要です');
+    if(!r.ok&&r.status!==204) throw new Error('起動失敗 '+r.status);
+    const t0=Date.now();
+    while(Date.now()-t0<120000){
+      await new Promise(res=>setTimeout(res,6000));
+      btn.textContent=`⚡ 反映待ち ${Math.round((Date.now()-t0)/1000)}s`;
+      try{
+        const p=await ghGetFile(cfg.level,'positions.json');
+        const pj=p.text?JSON.parse(p.text):{};
+        if((pj.ts||0)>prevTs){
+          positions=pj.positions||[]; posTs=pj.ts||0; liveOn=false;
+          renderEvalTab(); renderPlanTab(); renderActTab(); liveTick();
+          btn.textContent='✓ 最新化完了';
+          setTimeout(()=>{btn.textContent='⚡ 今すぐ更新';btn.disabled=false;},2500);
+          return;
+        }
+      }catch(e){}
+    }
+    throw new Error('タイムアウト(Actionsの実行状況を確認してください)');
+  }catch(e){
+    showMsgIn('buildMsg','⚡失敗: '+e.message,false);
+    btn.textContent='⚡ 今すぐ更新';btn.disabled=false;
+  }
+}
+$('quickRefresh').onclick=quickRefresh;
 $('reload').onclick=loadAll;
 fillCfg();
 if(!cfg.level.token || !cfg.plans.token) $('cfgBox').open=true;
-loadAll();
+loadAll().then(liveTick);
+setInterval(liveTick,LIVE_MS);
 </script>
 </body>
 </html>

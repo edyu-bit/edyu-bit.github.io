@@ -57,7 +57,9 @@ summary{font-size:12px;color:var(--muted);cursor:pointer}
 <body>
 <header>
   <h1>ポジション詳細 <span>BingX</span></h1>
-  <div><button id="reload">更新</button> <span id="upd" class="mono"></span></div>
+  <div><button id="quickRefresh">⚡ 今すぐ更新</button>
+    <button class="ghost" id="reload">再読込</button>
+    <span id="upd" class="mono"></span></div>
 </header>
 <main>
 
@@ -87,7 +89,10 @@ summary{font-size:12px;color:var(--muted);cursor:pointer}
       <p class="small" style="margin-top:8px">
         positions.json は Private リポジトリにあるため読み取りにPATが必要。
         holdings.html と同じトークンを使い回せます(Contents Read/Write権限)。
-        BingXキーはこのページには一切登場しません(Actions側のSecretsのみ)。
+        BingXキーはこのページには一切登場しません(Actions側のSecretsのみ)。<br>
+        <b>⚡今すぐ更新</b>(Actionsを起動して約30秒でBingXの最新ポジションを取得)を使うには、
+        PATに <b>Actions: Read and write</b> 権限の追加が必要です。
+        価格・損益はBingX公開APIで常時ライブ再計算されるため、キー/権限は不要です。
       </p>
     </div>
   </details>
@@ -126,21 +131,73 @@ $('cfgSave').onclick=()=>{
 
 function pnlClass(v){return v>0?'ok':v<0?'up':''}
 function pnlSign(v){return v>0?'+'+v.toFixed(2):v.toFixed(2)}
+function fmtP(n){if(!isFinite(n))return'—';const d=n>=1000?2:n>=1?4:n>=0.001?6:8;return String(parseFloat(n.toFixed(d)))}
+
+// ---------- ライブ価格(BingX公開API、キー不要) ----------
+// positions.jsonのentry/size/marginは構成が変わらない限り不変なので、
+// マーク価格だけ公開ティッカーで取り直せばPnL/ROE/清算距離はブラウザで正確に再計算できる
+const LIVE_MS=8000;
+let curData=null, liveOn=false;
+async function bingxAllPrices(symbols){
+  try{   // 一括ティッカー(symbol省略で全銘柄)を優先
+    const r=await fetch('https://open-api.bingx.com/openApi/swap/v2/quote/ticker');
+    const j=await r.json();
+    if(Array.isArray(j?.data)){
+      const m={};
+      for(const t of j.data){const p=parseFloat(t.lastPrice??t.price);if(t.symbol&&p>0)m[t.symbol]=p;}
+      if(Object.keys(m).length) return m;
+    }
+  }catch(e){}
+  const m={};   // フォールバック: 保有銘柄だけ個別取得
+  for(const s of symbols){
+    try{
+      const r=await fetch('https://open-api.bingx.com/openApi/swap/v2/quote/price?symbol='+s);
+      const p=parseFloat((await r.json())?.data?.price);
+      if(p>0)m[s]=p;
+    }catch(e){}
+  }
+  return Object.keys(m).length?m:null;
+}
+function recompute(data, priceMap){
+  let totalPnl=0, totalMargin=0, hit=0;
+  for(const p of (data.positions||[])){
+    const mark=priceMap[p.symbol];
+    if(mark>0){
+      p.mark=mark;
+      p.pnl=(mark-p.entry)*p.size*(p.side==='LONG'?1:-1);
+      p.roe=p.margin>0?p.pnl/p.margin*100:0;
+      p.size_usd=p.size*mark;
+      p.liq_dist_pct=(p.liq_price>0&&mark>0)?Math.abs(mark-p.liq_price)/mark*100:p.liq_dist_pct;
+      hit++;
+    }
+    totalPnl+=p.pnl; totalMargin+=p.margin;
+  }
+  data.summary.total_pnl=totalPnl;
+  data.summary.total_margin=totalMargin;
+  data.summary.total_roe=totalMargin>0?totalPnl/totalMargin*100:0;
+  return hit>0;
+}
+async function liveTick(){
+  if(!curData||!(curData.positions||[]).length) return;
+  const m=await bingxAllPrices(curData.positions.map(p=>p.symbol));
+  if(m&&recompute(curData,m)){liveOn=true;renderPositions(curData);}
+}
 
 function renderPositions(data){
   const s=data.summary;
   $('sum').innerHTML=`
     <div><b class="mono ${pnlClass(s.total_pnl)}">${pnlSign(s.total_pnl)} USDT</b>
-      <span>合計含み損益</span></div>
+      <span>合計含み損益${liveOn?' <span class="ok">●LIVE</span>':''}</span></div>
     <div><b class="mono ${pnlClass(s.total_roe)}">${pnlSign(s.total_roe)}%</b>
       <span>合計ROE</span></div>
     <div><b class="mono">${s.count}</b><span>ポジション数</span></div>
     <div><b class="mono">${s.total_margin.toFixed(0)} USDT</b><span>使用証拠金</span></div>`;
-  // 鮮度チェック
+  // 鮮度: 価格・損益はライブ再計算されるので、古さが問題になるのは「構成」(新規/決済の反映)だけ
   const ageMin=(Date.now()/1000-data.ts)/60;
-  $('staleNote').innerHTML=ageMin>200
-    ?`<span class="stale">⚠ データが${(ageMin/60).toFixed(1)}時間前。次のActions実行まで最大3時間の遅延があります</span>`
-    :`<span class="small">データ鮮度: ${ageMin.toFixed(0)}分前</span>`;
+  $('staleNote').innerHTML=(ageMin>30
+    ?`<span class="stale">ポジション構成: ${ageMin>120?(ageMin/60).toFixed(1)+'時間':ageMin.toFixed(0)+'分'}前(トレード直後は⚡今すぐ更新で約30秒で反映)</span>`
+    :`<span class="small">ポジション構成: ${ageMin.toFixed(0)}分前</span>`)
+    +(liveOn?`<span class="small"> / 価格・損益: ライブ(${LIVE_MS/1000}秒毎)</span>`:'');
 
   $('positions').innerHTML=(data.positions||[]).map(p=>{
     const liqW=Math.min(100,Math.max(5,100-p.liq_dist_pct*2));
@@ -155,41 +212,83 @@ function renderPositions(data){
       <div class="pos-grid">
         <div><span>ROE</span><b class="mono ${pnlClass(p.roe)}">${pnlSign(p.roe)}%</b></div>
         <div><span>レバレッジ</span><b class="mono">${p.leverage}x</b></div>
-        <div><span>サイズ</span><b class="mono">$${p.size_usd.toLocaleString()}</b></div>
+        <div><span>サイズ</span><b class="mono">$${Math.round(p.size_usd).toLocaleString()}</b></div>
         <div><span>証拠金</span><b class="mono">$${p.margin.toFixed(0)}</b></div>
-        <div><span>エントリー</span><b class="mono">${p.entry}</b></div>
-        <div><span>マーク</span><b class="mono">${p.mark}</b></div>
-        <div><span>清算価格</span><b class="mono">${p.liq_price}${liqWarn}</b></div>
-        <div><span>清算距離</span><b class="mono ${p.liq_dist_pct<10?'up':''}">${p.liq_dist_pct}%</b></div>
+        <div><span>エントリー</span><b class="mono">${fmtP(p.entry)}</b></div>
+        <div><span>マーク</span><b class="mono">${fmtP(p.mark)}</b></div>
+        <div><span>清算価格</span><b class="mono">${fmtP(p.liq_price)}${liqWarn}</b></div>
+        <div><span>清算距離</span><b class="mono ${p.liq_dist_pct<10?'up':''}">${p.liq_dist_pct.toFixed(1)}%</b></div>
       </div>
       <div class="liq-bar"><div style="width:${liqW}%;background:${liqCol}"></div></div>
     </div>`;
   }).join('')||'<p class="small">オープンポジションなし</p>';
 }
 
+async function fetchPositions(){
+  const r=await fetch(
+    `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${cfg.path}?ref=${cfg.branch}`,
+    {headers:{'Accept':'application/vnd.github+json',
+              'Authorization':'Bearer '+cfg.token}});
+  if(!r.ok) throw new Error('GitHub API '+r.status);
+  const j=await r.json();
+  const decoded=decodeURIComponent(escape(atob(j.content.replace(/\n/g,''))));
+  return JSON.parse(decoded);
+}
 async function load(){
   if(!cfg.token){$('cfgBox').open=true;
     $('sum').innerHTML='<div><span class="err">GitHub PATを設定してください</span></div>';
     return;}
   try{
-    const r=await fetch(
-      `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${cfg.path}?ref=${cfg.branch}`,
-      {headers:{'Accept':'application/vnd.github+json',
-                'Authorization':'Bearer '+cfg.token}});
-    if(!r.ok) throw new Error('GitHub API '+r.status);
-    const j=await r.json();
-    const decoded=decodeURIComponent(escape(atob(j.content.replace(/\n/g,''))));
-    renderPositions(JSON.parse(decoded));
+    curData=await fetchPositions();
+    renderPositions(curData);
+    liveTick();   // 初回から即ライブ化
     const d=new Date(Date.now()+9*3600*1000);
     $('upd').textContent=`${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')} JST`;
   }catch(e){
     $('sum').innerHTML=`<div><span class="err">取得失敗: ${e.message}</span></div>`;
   }
 }
+
+// ---------- ⚡今すぐ更新: positions_refresh.yml をworkflow_dispatchで起動 → 反映を待って再読込 ----------
+async function quickRefresh(){
+  const btn=$('quickRefresh');
+  if(!cfg.token){$('cfgBox').open=true;return;}
+  btn.disabled=true;btn.textContent='⚡ 起動中…';
+  const prevTs=curData?curData.ts:0;
+  try{
+    const r=await fetch(
+      `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/actions/workflows/positions_refresh.yml/dispatches`,
+      {method:'POST',
+       headers:{'Accept':'application/vnd.github+json','Authorization':'Bearer '+cfg.token,
+                'Content-Type':'application/json'},
+       body:JSON.stringify({ref:cfg.branch||'main'})});
+    if(r.status===403||r.status===404)
+      throw new Error('PATに「Actions: Read and write」権限が必要です(接続設定の説明参照)');
+    if(!r.ok&&r.status!==204) throw new Error('起動失敗 '+r.status);
+    // 新しいtsのpositions.jsonがコミットされるまでポーリング(最大120秒)
+    const t0=Date.now();
+    while(Date.now()-t0<120000){
+      await new Promise(res=>setTimeout(res,6000));
+      btn.textContent=`⚡ 反映待ち ${Math.round((Date.now()-t0)/1000)}s`;
+      try{
+        const d=await fetchPositions();
+        if(d.ts>prevTs){curData=d;liveOn=false;renderPositions(d);liveTick();
+          btn.textContent='✓ 最新化完了';setTimeout(()=>{btn.textContent='⚡ 今すぐ更新';btn.disabled=false;},2500);
+          return;}
+      }catch(e){}
+    }
+    throw new Error('タイムアウト(Actionsの実行状況をリポジトリで確認してください)');
+  }catch(e){
+    $('staleNote').innerHTML='<span class="err">⚡失敗: '+e.message+'</span>';
+    btn.textContent='⚡ 今すぐ更新';btn.disabled=false;
+  }
+}
+$('quickRefresh').onclick=quickRefresh;
 $('reload').onclick=load;
 fillCfg();
 if(!cfg.token)$('cfgBox').open=true;
 load();
+setInterval(liveTick,LIVE_MS);
 </script>
 </body>
 </html>
