@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>投資ロードマップ — ROADMAP</title>
+<meta name="theme-color" content="#0a0e14">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<style>
+:root{--bg:#0a0e14;--panel:#11161f;--panel2:#161d29;--border:#1f2733;
+--text:#d8e0ea;--muted:#6b7889;--up:#ff5c5c;--down:#4d9fff;
+--warn:#ffb454;--ok:#7dd3a0;--accent:#e8c470}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);
+font-family:'Noto Sans JP','Hiragino Sans',sans-serif;font-size:14px;line-height:1.6}
+.mono{font-family:'JetBrains Mono',Consolas,monospace}
+header{padding:14px 18px;border-bottom:1px solid var(--border);
+display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px}
+header h1{font-size:15px;font-weight:700}
+header h1 span{color:var(--accent)}
+#upd{font-size:11px;color:var(--muted)}
+main{padding:14px;max-width:720px;margin:0 auto}
+.card{background:var(--panel);border:1px solid var(--border);
+border-radius:6px;padding:14px;margin-bottom:14px}
+.card h2{font-size:12px;color:var(--accent);letter-spacing:.06em;margin-bottom:10px}
+label{font-size:11px;color:var(--muted);display:block;margin-bottom:3px}
+input,select{background:var(--panel2);border:1px solid var(--border);color:var(--text);
+padding:8px 10px;border-radius:4px;font-size:13px;width:100%;font-family:inherit}
+input:focus,select:focus{outline:none;border-color:var(--accent)}
+.field{margin-bottom:10px}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row>.field{flex:1;min-width:110px}
+button{background:var(--accent);color:#0a0e14;border:none;padding:9px 16px;
+border-radius:4px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit}
+button.ghost{background:none;border:1px solid var(--border);color:var(--text);font-weight:500}
+button.small{padding:6px 10px;font-size:12px}
+button:disabled{opacity:.35;cursor:not-allowed}
+.up{color:var(--up)}.down{color:var(--down)}.ok{color:var(--ok)}.warn{color:var(--warn)}
+.small{font-size:11px;color:var(--muted)}
+.msg{font-size:12px;padding:8px 12px;border-radius:4px;margin-top:10px;display:none}
+.msg.show{display:block}
+.msg.ok{border:1px solid var(--ok);color:var(--ok);background:rgba(125,211,160,.06)}
+.msg.err{border:1px solid var(--up);color:var(--up);background:rgba(255,92,92,.07)}
+details{margin-top:6px}
+summary{font-size:12px;color:var(--muted);cursor:pointer}
+
+.total{font-size:26px;font-weight:700}
+.milestones{display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:8px;margin-top:12px}
+.ms{background:var(--panel2);border:1px solid var(--border);border-radius:5px;padding:8px}
+.ms.active{border-color:var(--accent)}
+.ms .label{font-size:11px;color:var(--muted)}
+.ms .bar{height:6px;background:var(--bg);border-radius:3px;overflow:hidden;margin-top:6px}
+.ms .bar div{height:100%;background:var(--accent)}
+.ms.done .bar div{background:var(--ok)}
+.next{font-size:12px;color:var(--muted);margin-top:10px}
+
+.engine-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.engine{background:var(--panel2);border:1px solid var(--border);border-radius:5px;padding:12px}
+.engine h3{font-size:12px;color:var(--accent);margin-bottom:6px}
+.engine .num{font-size:20px;font-weight:700}
+.engine .bar{height:5px;background:var(--bg);border-radius:3px;overflow:hidden;margin-top:6px}
+.engine .bar div{height:100%;background:var(--accent)}
+.tag{display:inline-block;font-size:10px;padding:2px 6px;border-radius:3px;margin-top:6px}
+.tag.ok{background:rgba(125,211,160,.15);color:var(--ok)}
+.tag.warn{background:rgba(255,180,84,.15);color:var(--warn)}
+.tag.up{background:rgba(255,92,92,.15);color:var(--up)}
+
+.banner{border-radius:5px;padding:10px 12px;margin-bottom:8px;font-size:12px;white-space:pre-line}
+.banner.harvest{background:rgba(232,196,112,.1);border:1px solid var(--accent);color:var(--accent)}
+.banner.death{background:rgba(255,92,92,.1);border:1px solid var(--up);color:var(--up)}
+.banner.stop{background:rgba(255,92,92,.1);border:1px solid var(--up);color:var(--up)}
+.banner.halve{background:rgba(255,180,84,.1);border:1px solid var(--warn);color:var(--warn)}
+.banner.withdraw{background:rgba(77,159,255,.1);border:1px solid var(--down);color:var(--down)}
+
+.hist-row{font-size:12px;padding:6px 0;border-bottom:1px solid var(--border)}
+.hist-row:last-child{border-bottom:none}
+.stat-grid{display:flex;gap:20px;flex-wrap:wrap}
+.stat-grid div span{display:block;font-size:10px;color:var(--muted)}
+.stat-grid div b{font-size:18px}
+table.eta{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}
+table.eta td,table.eta th{padding:5px 4px;border-bottom:1px solid var(--border);text-align:left}
+table.eta th{color:var(--muted);font-weight:500}
+</style>
+</head>
+<body>
+<header>
+  <h1>投資ロードマップ <span>ROADMAP</span></h1>
+  <div><button class="ghost small" id="reload" type="button">更新</button> <span id="upd" class="mono small"></span></div>
+</header>
+
+<main>
+
+<div id="banners"></div>
+
+<div class="card">
+  <h2>総資産</h2>
+  <div class="total mono" id="totalAmt">—</div>
+  <div class="milestones" id="milestones"></div>
+  <div class="next" id="nextMs"></div>
+</div>
+
+<div class="card">
+  <h2>エンジン</h2>
+  <div class="engine-grid">
+    <div class="engine">
+      <h3>POD <span class="small" id="podStage"></span></h3>
+      <div class="num mono" id="podBal">—</div>
+      <div class="small" id="podSub">—</div>
+      <div class="bar"><div id="podBar" style="width:0%"></div></div>
+    </div>
+    <div class="engine">
+      <h3>CORE</h3>
+      <div class="num mono" id="coreBal">—</div>
+      <div class="small" id="coreSub">—</div>
+      <span class="tag" id="coreTag" style="display:none"></span>
+    </div>
+    <div class="engine">
+      <h3>VAULT</h3>
+      <div class="num mono" id="vaultBal">—</div>
+      <div class="small" id="vaultSub">—</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>操作</h2>
+  <div class="row">
+    <button class="ghost" id="btnPodUpdate" type="button">Pod残高更新</button>
+    <button id="btnHarvest" type="button" disabled>収穫実行</button>
+    <button class="ghost" id="btnPodDeath" type="button" disabled>新Pod開始</button>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <button class="ghost" id="btnCoreUpdate" type="button">Core残高更新</button>
+    <button class="ghost" id="btnCoreMonthReset" type="button">Core月初リセット</button>
+    <button id="btnWithdraw" type="button" disabled>出金実行</button>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <button class="ghost small" id="btnVaultAdjust" type="button">Vault手動調整(初期取込み用)</button>
+  </div>
+  <div class="msg" id="opMsg"></div>
+</div>
+
+<div class="card">
+  <h2>トレード記録追加</h2>
+  <div class="row">
+    <div class="field"><label>エンジン</label>
+      <select id="trEngine"><option value="core">Core</option><option value="pod">Pod</option></select></div>
+    <div class="field"><label>方向</label>
+      <select id="trSide"><option value="LONG">LONG</option><option value="SHORT">SHORT</option></select></div>
+    <div class="field"><label>レジーム</label>
+      <select id="trRegime"><option value="hot">🔥 hot</option><option value="neutral" selected>─ neutral</option><option value="cold">❄️ cold</option></select></div>
+  </div>
+  <div class="row">
+    <div class="field"><label>セッション</label><input id="trSession" placeholder="tokyo/london/ny"></div>
+    <div class="field"><label>実現R</label><input id="trR" type="number" step="any" placeholder="1.5"></div>
+  </div>
+  <div class="field"><label>メモ</label><input id="trNote"></div>
+  <button id="btnTrade" type="button">記録する</button>
+  <div class="msg" id="trMsg"></div>
+</div>
+
+<div class="card">
+  <h2>統計</h2>
+  <div class="stat-grid">
+    <div><b class="mono" id="statP">—</b><span>Pod実測成功率</span></div>
+    <div><b class="mono" id="statHarvests">—</b><span>収穫回数</span></div>
+    <div><b class="mono" id="statDeaths">—</b><span>Pod死亡回数</span></div>
+  </div>
+  <p class="small" style="margin-top:10px">マイルストーン目安(初期プランの静的値。実測ベースの動的ETA・バケット別期待値はPhase 2で実装予定)</p>
+  <table class="eta">
+    <tr><th>到達点</th><th>想定所要</th><th>主エンジン</th></tr>
+    <tr><td>100万</td><td>3〜9ヶ月</td><td>Pod量産</td></tr>
+    <tr><td>300万</td><td>8〜18ヶ月</td><td>Pod + Core複利開始</td></tr>
+    <tr><td>1000万</td><td>1.5〜3年</td><td>Core主導</td></tr>
+    <tr><td>3000万</td><td>2.5〜4.5年</td><td>Core複利</td></tr>
+    <tr><td>1億</td><td>4〜7年</td><td>Core + Podスケール実験</td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h2>直近ログ</h2>
+  <div id="history"></div>
+</div>
+
+<div class="card">
+  <details id="cfgBox">
+    <summary>接続設定(初回のみ)</summary>
+    <div style="margin-top:10px">
+      <div class="row">
+        <div class="field"><label>Owner</label><input id="cfgOwner" class="mono"></div>
+        <div class="field"><label>Repo</label><input id="cfgRepo" class="mono"></div>
+        <div class="field"><label>Branch</label><input id="cfgBranch" class="mono"></div>
+      </div>
+      <div class="field"><label>GitHub PAT(trade-plans、Contents: Read/Write)</label>
+        <input id="cfgToken" type="password" class="mono" placeholder="github_pat_..."></div>
+      <button class="ghost" id="cfgSave" type="button">設定を保存</button>
+      <p class="small" style="margin-top:8px">
+        トークンは<b>この端末のlocalStorageのみ</b>に保存(送信先はGitHub APIだけ)。<br>
+        position_planner.htmlで既にtrade-plans用トークンを設定済みなら、この端末では自動的に引き継ぎます。
+      </p>
+    </div>
+  </details>
+</div>
+
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const LS='roadmap_cfg';
+let cfg=Object.assign({owner:'edyu-bit',repo:'trade-plans',branch:'main',token:''},
+  JSON.parse(localStorage.getItem(LS)||'{}'));
+if(!cfg.token){
+  // position_planner.html で既にtrade-plans用トークンを設定済みなら一度だけ引き継ぐ
+  try{
+    const pp=JSON.parse(localStorage.getItem('position_planner_cfg')||'{}');
+    if(pp.plans && pp.plans.token){
+      cfg={owner:pp.plans.owner||cfg.owner, repo:pp.plans.repo||cfg.repo,
+           branch:pp.plans.branch||cfg.branch, token:pp.plans.token};
+      localStorage.setItem(LS, JSON.stringify(cfg));
+    }
+  }catch(e){}
+}
+
+const MILESTONES=[
+  {amt:100000, label:'10万'}, {amt:1000000, label:'100万'}, {amt:3000000, label:'300万'},
+  {amt:10000000, label:'1000万'}, {amt:30000000, label:'3000万'}, {amt:100000000, label:'1億'}
+];
+const POD_HARVEST_TARGET=100000, POD_NEXT_SEED=10000, POD_DEATH_THRESHOLD=500;
+const HARVEST_CORE_SHARE_PCT=60, HARVEST_VAULT_SHARE_PCT=30, HARVEST_TAX_RESERVE_PCT=30;
+const CORE_DAILY_STOP_R=-3, CORE_DD_HALVE_PCT=15, CORE_DD_STOP_PCT=25;
+
+let input=null, inputSha=null, actionsRaw='', actionsSha=null;
+
+// ---------- base64/utf8 ----------
+function b64ToUtf8(b64){
+  const bin=atob(b64.replace(/\n/g,''));
+  const bytes=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+  return new TextDecoder('utf-8').decode(bytes);
+}
+function utf8ToB64(str){
+  const bytes=new TextEncoder().encode(str);
+  let bin='';
+  for(const b of bytes) bin+=String.fromCharCode(b);
+  return btoa(bin);
+}
+
+// ---------- GitHub API ----------
+async function ghGetFile(path){
+  const r=await fetch(
+    `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${path}?ref=${cfg.branch}`,
+    {headers:{'Accept':'application/vnd.github+json',
+              ...(cfg.token?{'Authorization':'Bearer '+cfg.token}:{})}});
+  if(r.status===404) return {text:null, sha:null, notFound:true};
+  if(!r.ok) throw new Error('GitHub API '+r.status+' ('+path+')');
+  const j=await r.json();
+  return {text:b64ToUtf8(j.content), sha:j.sha};
+}
+async function ghPutFile(path, text, message, sha){
+  const body={message, content:utf8ToB64(text), branch:cfg.branch};
+  if(sha) body.sha=sha;
+  const r=await fetch(
+    `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${path}`,
+    {method:'PUT',
+     headers:{'Accept':'application/vnd.github+json',
+              'Authorization':'Bearer '+cfg.token},
+     body:JSON.stringify(body)});
+  if(!r.ok){const j=await r.json().catch(()=>({}));throw new Error(r.status+' '+(j.message||''));}
+  const j=await r.json();
+  return j.content.sha;
+}
+
+function showMsgIn(id, text, ok){
+  const m=$(id); m.textContent=text; m.className='msg show '+(ok?'ok':'err');
+}
+
+// ---------- 時刻ヘルパー(JST) ----------
+function jstNow(){ return new Date(Date.now()+9*3600*1000); }
+function todayStr(){
+  const d=jstNow();
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+}
+function jstDateStrOf(isoTs){
+  const d=new Date(new Date(isoTs).getTime()+9*3600*1000);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+}
+function nowIso(){ return new Date().toISOString(); }
+function yen(n){ return '¥'+Math.round(n||0).toLocaleString(); }
+
+// ---------- データ読み込み ----------
+function defaultInput(){
+  return {
+    pod:{stage_no:1, balance:10000, start_date:todayStr(), updated_ts:nowIso()},
+    core:{balance:0, month_start_balance:0, month_start_date:todayStr(), updated_ts:nowIso()},
+    vault:{balance:0, pending_withdrawal:0, updated_ts:nowIso()}
+  };
+}
+async function loadAll(){
+  $('upd').textContent='読み込み中…';
+  if(!cfg.token){ input=defaultInput(); inputSha=null; actionsRaw=''; actionsSha=null; renderAll(); $('cfgBox').open=true; $('upd').textContent=''; return; }
+  try{
+    const p=await ghGetFile('ladder_input.json');
+    input = p.notFound || !p.text ? defaultInput() : JSON.parse(p.text);
+    inputSha = p.sha;
+    input.pod = Object.assign(defaultInput().pod, input.pod||{});
+    input.core = Object.assign(defaultInput().core, input.core||{});
+    input.vault = Object.assign(defaultInput().vault, input.vault||{});
+  }catch(e){ input=defaultInput(); inputSha=null; showMsgIn('opMsg','ladder_input.json読み込み失敗: '+e.message,false); }
+  try{
+    const a=await ghGetFile('actions_log.jsonl');
+    actionsRaw = a.notFound||!a.text ? '' : a.text;
+    actionsSha = a.sha;
+  }catch(e){ actionsRaw=''; actionsSha=null; }
+  renderAll();
+  const d=jstNow();
+  $('upd').textContent=`${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')} JST 更新`;
+}
+
+function parseActions(){
+  return actionsRaw.split('\n').filter(l=>l.trim()).map(l=>{
+    try{ return JSON.parse(l); }catch(e){ return null; }
+  }).filter(Boolean);
+}
+
+async function saveInput(){
+  inputSha = await ghPutFile('ladder_input.json', JSON.stringify(input,null,1)+'\n', 'update ladder_input', inputSha);
+}
+async function appendAction(fields){
+  const rec=Object.assign({ts:nowIso()}, fields);
+  const newText=(actionsRaw && !actionsRaw.endsWith('\n') ? actionsRaw+'\n' : actionsRaw) + JSON.stringify(rec)+'\n';
+  actionsSha = await ghPutFile('actions_log.jsonl', newText, 'log action', actionsSha);
+  actionsRaw = newText;
+}
+
+// ---------- 状態判定(ladder_engine.pyと同じ閾値をクライアント側でも再計算) ----------
+function coreRToday(actions){
+  const today=todayStr();
+  let total=0;
+  for(const a of actions){
+    if(a.kind!=='trade' || a.engine!=='core') continue;
+    if(!a.ts) continue;
+    if(jstDateStrOf(a.ts)!==today) continue;
+    const r=parseFloat(a.r);
+    if(isFinite(r)) total+=r;
+  }
+  return total;
+}
+function podDeathsRecent(actions, days){
+  const cutoff=Date.now()-days*86400000;
+  return actions.filter(a=>a.kind==='pod_death' && a.ts && new Date(a.ts).getTime()>=cutoff).length;
+}
+
+function computeStatus(){
+  const actions=parseActions();
+  const pod=input.pod, core=input.core, vault=input.vault;
+  const harvestReady = pod.balance>=POD_HARVEST_TARGET;
+  const podDead = pod.balance<=POD_DEATH_THRESHOLD;
+  const deaths7d = podDeathsRecent(actions, 7);
+  const rToday = coreRToday(actions);
+  const coreDailyStop = rToday<=CORE_DAILY_STOP_R;
+  const ddPct = core.month_start_balance>0 ? (core.month_start_balance-core.balance)/core.month_start_balance*100 : null;
+  let ddStage='normal';
+  if(ddPct!=null){ if(ddPct>=CORE_DD_STOP_PCT) ddStage='stopped'; else if(ddPct>=CORE_DD_HALVE_PCT) ddStage='halved'; }
+  const pendingWithdrawal = vault.pending_withdrawal>0;
+  return {actions, harvestReady, podDead, deaths7d, rToday, coreDailyStop, ddPct, ddStage, pendingWithdrawal};
+}
+
+// ---------- 描画 ----------
+function renderMilestones(total){
+  let prev=0;
+  let activeSet=false;
+  $('milestones').innerHTML = MILESTONES.map(m=>{
+    const done = total>=m.amt;
+    const fill = Math.max(0, Math.min(100, (total-prev)/(m.amt-prev)*100));
+    const isActive = !done && !activeSet;
+    if(isActive) activeSet=true;
+    const cls = 'ms'+(done?' done':'')+(isActive?' active':'');
+    const html = `<div class="${cls}"><div class="label">${m.label}</div><div class="bar"><div style="width:${fill}%"></div></div></div>`;
+    prev = m.amt;
+    return html;
+  }).join('');
+  const nextMs = MILESTONES.find(m=>total<m.amt);
+  $('nextMs').textContent = nextMs
+    ? `次: ${nextMs.label}まで残り ${yen(nextMs.amt-total)}`
+    : '1億到達済み — お疲れ様でした';
+}
+
+function renderEngines(status){
+  const pod=input.pod, core=input.core, vault=input.vault;
+  $('podStage').textContent = `#${pod.stage_no}`;
+  $('podBal').textContent = yen(pod.balance);
+  $('podBar').style.width = Math.max(0,Math.min(100, pod.balance/POD_HARVEST_TARGET*100))+'%';
+  $('podSub').textContent = status.harvestReady ? '収穫可能' : status.podDead ? '死亡(新Pod開始へ)' : `目標まで ${yen(POD_HARVEST_TARGET-pod.balance)}`;
+
+  $('coreBal').textContent = yen(core.balance);
+  const ddTxt = status.ddPct!=null ? `月間DD ${status.ddPct>=0?'-':'+'}${Math.abs(status.ddPct).toFixed(1)}%` : '月初残高未設定';
+  $('coreSub').textContent = `本日 ${status.rToday>=0?'+':''}${status.rToday.toFixed(1)}R / ${ddTxt}`;
+  const tag=$('coreTag');
+  if(status.ddStage==='stopped'){ tag.style.display='inline-block'; tag.textContent='全停止'; tag.className='tag up'; }
+  else if(status.ddStage==='halved'){ tag.style.display='inline-block'; tag.textContent='リスク半減'; tag.className='tag warn'; }
+  else if(status.coreDailyStop){ tag.style.display='inline-block'; tag.textContent='本日停止'; tag.className='tag up'; }
+  else{ tag.style.display='none'; }
+
+  $('vaultBal').textContent = yen(vault.balance);
+  $('vaultSub').textContent = status.pendingWithdrawal ? `未出金 ${yen(vault.pending_withdrawal)}` : '未出金なし';
+}
+
+function renderBanners(status){
+  const b=[];
+  if(status.harvestReady){
+    const remainder = input.pod.balance - POD_NEXT_SEED;
+    const coreShare = remainder*HARVEST_CORE_SHARE_PCT/100;
+    const vaultGross = remainder*HARVEST_VAULT_SHARE_PCT/100;
+    const tax = vaultGross*HARVEST_TAX_RESERVE_PCT/100;
+    b.push(`<div class="banner harvest">🪜 収穫警報 — Pod #${input.pod.stage_no}\n次のPodへ ${yen(POD_NEXT_SEED)} / Coreへ ${yen(coreShare)} / Vaultへ ${yen(vaultGross)}(納税箱 ${yen(tax)})</div>`);
+  }
+  if(status.podDead){
+    let t=`💀 Pod死警報 — Pod #${input.pod.stage_no}(残高 ${yen(input.pod.balance)})。[新Pod開始]を押してください`;
+    if(status.deaths7d>=2) t+=`\n🚨 直近7日で${status.deaths7d}回死亡 — 48時間の強制休止を推奨`;
+    b.push(`<div class="banner death">${t}</div>`);
+  }
+  if(status.ddStage==='stopped') b.push(`<div class="banner stop">🚨 Core全停止 — 月間DD ${status.ddPct.toFixed(1)}%。新規エントリー禁止</div>`);
+  else if(status.ddStage==='halved') b.push(`<div class="banner halve">⚠️ Coreリスク半減 — 月間DD ${status.ddPct.toFixed(1)}%</div>`);
+  if(status.coreDailyStop) b.push(`<div class="banner stop">🚨 Core本日停止 — 本日 ${status.rToday.toFixed(1)}R</div>`);
+  if(status.pendingWithdrawal) b.push(`<div class="banner withdraw">📤 未出金のVault割当 ${yen(input.vault.pending_withdrawal)} が残っています</div>`);
+  $('banners').innerHTML = b.join('');
+}
+
+function renderStats(status){
+  const harvests = status.actions.filter(a=>a.kind==='harvest').length;
+  const deaths = status.actions.filter(a=>a.kind==='pod_death').length;
+  $('statHarvests').textContent = harvests;
+  $('statDeaths').textContent = deaths;
+  const attempts = harvests+deaths;
+  $('statP').textContent = attempts>=1 ? Math.round(harvests/attempts*100)+'%'+(attempts<3?'(計測中)':'') : '計測中';
+}
+
+function renderHistory(){
+  const lines=actionsRaw.split('\n').filter(l=>l.trim());
+  const recent=lines.slice(-20).reverse();
+  $('history').innerHTML = recent.length ? recent.map(l=>{
+    let r; try{ r=JSON.parse(l); }catch(e){ return ''; }
+    const ts=(r.ts||'').slice(0,16).replace('T',' ');
+    if(r.kind==='trade') return `<div class="hist-row"><span class="mono">${ts}</span> 記録 ${r.engine||''} ${r.side||''} ${r.regime||''} R=${r.r??''} ${r.note?('— '+r.note):''}</div>`;
+    if(r.kind==='harvest') return `<div class="hist-row"><span class="mono">${ts}</span> 🪜 収穫 Pod#${r.pod_stage_no} ${yen(r.pod_balance)}</div>`;
+    if(r.kind==='pod_death') return `<div class="hist-row"><span class="mono">${ts}</span> 💀 Pod死 #${r.pod_stage_no} ${yen(r.balance)}</div>`;
+    if(r.kind==='withdrawal') return `<div class="hist-row"><span class="mono">${ts}</span> 📤 出金 ${yen(r.amount)}</div>`;
+    if(r.kind==='vault_adjust') return `<div class="hist-row"><span class="mono">${ts}</span> Vault調整 ${yen(r.amount)}</div>`;
+    return `<div class="hist-row"><span class="mono">${ts}</span> ${r.base||''} ${r.action||''} ${r.price!==undefined?('@'+r.price):''} ${r.note?('— '+r.note):''}</div>`;
+  }).join('') : '<p class="small">履歴なし</p>';
+}
+
+function renderAll(){
+  const status=computeStatus();
+  const total=(input.pod.balance||0)+(input.core.balance||0)+(input.vault.balance||0);
+  $('totalAmt').textContent=yen(total);
+  renderMilestones(total);
+  renderEngines(status);
+  renderBanners(status);
+  renderStats(status);
+  renderHistory();
+  $('btnHarvest').disabled=!status.harvestReady;
+  $('btnPodDeath').disabled=!status.podDead;
+  $('btnWithdraw').disabled=!status.pendingWithdrawal;
+}
+
+// ---------- 操作 ----------
+function requireToken(){
+  if(!cfg.token){ showMsgIn('opMsg','trade-plans用トークンが未設定です',false); $('cfgBox').open=true; return false; }
+  return true;
+}
+
+$('btnPodUpdate').onclick=async ()=>{
+  if(!requireToken()) return;
+  const v=prompt('新しいPod残高(円)', input.pod.balance);
+  if(v===null) return;
+  const n=parseFloat(v);
+  if(!isFinite(n) || n<0){ showMsgIn('opMsg','数値を入力してください',false); return; }
+  try{
+    input.pod.balance=n; input.pod.updated_ts=nowIso();
+    await saveInput();
+    showMsgIn('opMsg','Pod残高を更新しました', true);
+    renderAll();
+  }catch(e){ showMsgIn('opMsg','失敗: '+e.message,false); }
+};
+
+$('btnHarvest').onclick=async ()=>{
+  if(!requireToken()) return;
+  const podBalance=input.pod.balance;
+  const remainder=podBalance-POD_NEXT_SEED;
+  const coreShare=remainder*HARVEST_CORE_SHARE_PCT/100;
+  const vaultGross=remainder*HARVEST_VAULT_SHARE_PCT/100;
+  const tax=vaultGross*HARVEST_TAX_RESERVE_PCT/100;
+  const ok=confirm(`収穫実行\n残高 ${yen(podBalance)}\n次Podへ ${yen(POD_NEXT_SEED)}\nCoreへ ${yen(coreShare)}\nVaultへ ${yen(vaultGross)}(納税箱 ${yen(tax)})\n\nこの内容で実行しますか？`);
+  if(!ok) return;
+  try{
+    await appendAction({kind:'harvest', pod_stage_no:input.pod.stage_no, pod_balance:podBalance,
+      next_seed:POD_NEXT_SEED, core_share:coreShare, vault_share:vaultGross, tax_reserve:tax});
+    input.pod={stage_no:input.pod.stage_no+1, balance:POD_NEXT_SEED, start_date:todayStr(), updated_ts:nowIso()};
+    input.core.balance=(input.core.balance||0)+coreShare; input.core.updated_ts=nowIso();
+    input.vault.balance=(input.vault.balance||0)+vaultGross;
+    input.vault.pending_withdrawal=(input.vault.pending_withdrawal||0)+vaultGross;
+    input.vault.updated_ts=nowIso();
+    await saveInput();
+    showMsgIn('opMsg','収穫を記録しました。新Podが#'+input.pod.stage_no+'として開始されました', true);
+    renderAll();
+  }catch(e){ showMsgIn('opMsg','失敗: '+e.message,false); }
+};
+
+$('btnPodDeath').onclick=async ()=>{
+  if(!requireToken()) return;
+  const ok=confirm(`Pod #${input.pod.stage_no}(残高 ${yen(input.pod.balance)})を終了し、新Podを開始しますか？`);
+  if(!ok) return;
+  try{
+    await appendAction({kind:'pod_death', pod_stage_no:input.pod.stage_no, balance:input.pod.balance});
+    input.pod={stage_no:input.pod.stage_no+1, balance:POD_NEXT_SEED, start_date:todayStr(), updated_ts:nowIso()};
+    await saveInput();
+    showMsgIn('opMsg','新Pod #'+input.pod.stage_no+' を開始しました', true);
+    renderAll();
+  }catch(e){ showMsgIn('opMsg','失敗: '+e.message,false); }
+};
+
+$('btnCoreUpdate').onclick=async ()=>{
+  if(!requireToken()) return;
+  const v=prompt('新しいCore残高(円)', input.core.balance);
+  if(v===null) return;
+  const n=parseFloat(v);
+  if(!isFinite(n) || n<0){ showMsgIn('opMsg','数値を入力してください',false); return; }
+  try{
+    input.core.balance=n; input.core.updated_ts=nowIso();
+    await saveInput();
+    showMsgIn('opMsg','Core残高を更新しました', true);
+    renderAll();
+  }catch(e){ showMsgIn('opMsg','失敗: '+e.message,false); }
+};
+
+$('btnCoreMonthReset').onclick=async ()=>{
+  if(!requireToken()) return;
+  const ok=confirm(`今月の開始残高を現在のCore残高(${yen(input.core.balance)})にリセットしますか？\nDD計算の基準がここから再スタートします。`);
+  if(!ok) return;
+  try{
+    input.core.month_start_balance=input.core.balance; input.core.month_start_date=todayStr(); input.core.updated_ts=nowIso();
+    await saveInput();
+    showMsgIn('opMsg','Core月初残高をリセットしました', true);
+    renderAll();
+  }catch(e){ showMsgIn('opMsg','失敗: '+e.message,false); }
+};
+
+$('btnWithdraw').onclick=async ()=>{
+  if(!requireToken()) return;
+  const amt=input.vault.pending_withdrawal;
+  const ok=confirm(`${yen(amt)} を出金しましたか？(この端末での確認のみ。実際の出金操作は取引所側で先に行ってください)`);
+  if(!ok) return;
+  try{
+    await appendAction({kind:'withdrawal', amount:amt});
+    input.vault.pending_withdrawal=0; input.vault.updated_ts=nowIso();
+    await saveInput();
+    showMsgIn('opMsg','出金を記録しました', true);
+    renderAll();
+  }catch(e){ showMsgIn('opMsg','失敗: '+e.message,false); }
+};
+
+$('btnVaultAdjust').onclick=async ()=>{
+  if(!requireToken()) return;
+  const v=prompt('Vault残高を直接いくつに設定しますか？(既存資金の初期取込み用。通常は収穫実行を使ってください)', input.vault.balance);
+  if(v===null) return;
+  const n=parseFloat(v);
+  if(!isFinite(n) || n<0){ showMsgIn('opMsg','数値を入力してください',false); return; }
+  try{
+    const delta=n-input.vault.balance;
+    input.vault.balance=n; input.vault.updated_ts=nowIso();
+    await appendAction({kind:'vault_adjust', amount:delta});
+    await saveInput();
+    showMsgIn('opMsg','Vault残高を調整しました', true);
+    renderAll();
+  }catch(e){ showMsgIn('opMsg','失敗: '+e.message,false); }
+};
+
+$('btnTrade').onclick=async ()=>{
+  if(!requireToken()) return;
+  const r=parseFloat($('trR').value);
+  if(!isFinite(r)){ showMsgIn('trMsg','実現Rを数値で入力してください',false); return; }
+  try{
+    await appendAction({kind:'trade', engine:$('trEngine').value, side:$('trSide').value,
+      regime:$('trRegime').value, session:$('trSession').value.trim(), r,
+      note:$('trNote').value.trim()});
+    showMsgIn('trMsg','記録しました', true);
+    $('trR').value=''; $('trSession').value=''; $('trNote').value='';
+    renderAll();
+  }catch(e){ showMsgIn('trMsg','失敗: '+e.message,false); }
+};
+
+// ---------- 設定 ----------
+function fillCfg(){
+  $('cfgOwner').value=cfg.owner; $('cfgRepo').value=cfg.repo;
+  $('cfgBranch').value=cfg.branch; $('cfgToken').value=cfg.token;
+}
+$('cfgSave').onclick=async ()=>{
+  cfg={owner:$('cfgOwner').value.trim()||'edyu-bit', repo:$('cfgRepo').value.trim()||'trade-plans',
+       branch:$('cfgBranch').value.trim()||'main', token:$('cfgToken').value.trim()};
+  localStorage.setItem(LS, JSON.stringify(cfg));
+  await loadAll();
+};
+$('reload').onclick=loadAll;
+
+// ---------- 初期化 ----------
+fillCfg();
+if(!cfg.token) $('cfgBox').open=true;
+loadAll();
+
+// ---------- PWA: service worker登録 ----------
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
+</script>
+</body>
+</html>
