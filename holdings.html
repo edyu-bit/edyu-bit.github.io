@@ -69,6 +69,15 @@ summary{font-size:12px;color:var(--muted);cursor:pointer}
   </div>
   <div class="msg" id="msg"></div>
   <div style="margin-top:12px">
+    <label>BingX実ポジション(positions.json・3時間毎自動更新)</label>
+    <div class="chips" id="liveChips"><span class="small">—</span></div>
+    <div class="row">
+      <button class="ghost" id="liveRefresh">🔄 実ポジションを取得</button>
+      <button class="ghost" id="liveApply" disabled>実ポジションをリストへ反映</button>
+    </div>
+    <span class="small" id="liveTs"></span>
+  </div>
+  <div style="margin-top:12px">
     <label>タップで追加(出来高上位・Bybit)</label>
     <div class="chips" id="picker"><span class="small">読み込み中…</span></div>
   </div>
@@ -105,9 +114,21 @@ summary{font-size:12px;color:var(--muted);cursor:pointer}
 </main>
 <script>
 const LS='holdings_editor_cfg';
+// 共有設定: 1ページでPATを保存すれば全ページで使える(range_alert/killzone等と共通)
+const SHARED_CFG_LS='gh_shared_cfg';
+function loadSharedCfg(){try{return JSON.parse(localStorage.getItem(SHARED_CFG_LS)||'{}')}catch(e){return{}}}
+function saveSharedCfg(owner,branch,levelToken){
+  const s=loadSharedCfg();
+  if(owner)s.owner=owner; if(branch)s.branch=branch; if(levelToken)s.levelToken=levelToken;
+  localStorage.setItem(SHARED_CFG_LS,JSON.stringify(s));
+}
 let cfg = Object.assign(
   {owner:'edyu-bit', repo:'level', branch:'main', path:'holdings.json', token:''},
   JSON.parse(localStorage.getItem(LS)||'{}'));
+(()=>{ // 自ページにトークンが無ければ共有設定から補完
+  const s=loadSharedCfg();
+  if(!cfg.token&&s.levelToken){cfg.token=s.levelToken; if(s.owner)cfg.owner=s.owner; if(s.branch)cfg.branch=s.branch;}
+})();
 let holdings=[], sha=null, dirty=false, funding={};
 const $=id=>document.getElementById(id);
 
@@ -235,6 +256,52 @@ $('addSym').addEventListener('keydown',e=>{
   if(e.key==='Enter'){e.preventDefault();$('addBtn').click();}});
 $('saveBtn').onclick=saveHoldings;
 
+// ---------- BingX実ポジション(positions.json) ----------
+const HELD_CACHE_LS='held_positions_cache';
+let liveBases=[], liveTsVal=null;
+function renderLive(fromCache){
+  const c=$('liveChips');
+  if(!liveBases.length){c.innerHTML='<span class="small">—(🔄で取得)</span>';$('liveApply').disabled=true;$('liveTs').textContent='';return;}
+  c.innerHTML=liveBases.map(b=>{
+    const inList=holdings.includes(b);
+    return `<span class="chip"><b class="mono ${inList?'ok':'warn'}">${b}</b></span>`;
+  }).join('');
+  $('liveApply').disabled=false;
+  $('liveTs').textContent=(liveTsVal?new Date(liveTsVal).toLocaleString('ja-JP')+' 時点':'')
+    +(fromCache?'(キャッシュ)':'')+' — 緑=リスト登録済み / 橙=未登録';
+}
+async function refreshLive(){
+  $('liveRefresh').disabled=true;$('liveRefresh').textContent='取得中…';
+  try{
+    const r=await api(`contents/positions.json?ref=${cfg.branch}`);
+    if(!r.ok)throw new Error('GitHub API '+r.status);
+    const j=await r.json();
+    const decoded=decodeURIComponent(escape(atob(j.content.replace(/\n/g,''))));
+    const pj=JSON.parse(decoded);
+    liveBases=[...new Set((pj.positions||[]).map(p=>p.base).filter(Boolean))].sort();
+    liveTsVal=pj.ts?pj.ts*1000:Date.now();
+    if(liveBases.length)localStorage.setItem(HELD_CACHE_LS,JSON.stringify({bases:liveBases,ts:liveTsVal}));
+    renderLive(false);
+  }catch(e){
+    $('liveChips').innerHTML='<span class="small">取得失敗: '+e.message+'</span>';
+  }
+  $('liveRefresh').disabled=false;$('liveRefresh').textContent='🔄 実ポジションを取得';
+}
+$('liveRefresh').onclick=refreshLive;
+$('liveApply').onclick=()=>{
+  if(!liveBases.length)return;
+  holdings=[...liveBases];
+  setDirty(true);render();renderPicker();
+  showMsg(`実ポジション${liveBases.length}銘柄をリストへ反映しました。「保存(コミット)」で確定します`,true);
+};
+// 起動時: 共有キャッシュがあれば即表示(取得を待たない)
+(()=>{
+  try{
+    const c=JSON.parse(localStorage.getItem(HELD_CACHE_LS)||'null');
+    if(c&&Array.isArray(c.bases)&&c.bases.length){liveBases=c.bases;liveTsVal=c.ts||null;renderLive(true);}
+  }catch(e){}
+})();
+
 // ---------- 設定 ----------
 function fillCfg(){
   $('cfgOwner').value=cfg.owner; $('cfgRepo').value=cfg.repo;
@@ -247,7 +314,8 @@ $('cfgSave').onclick=()=>{
        path:$('cfgPath').value.trim()||'holdings.json',
        token:$('cfgToken').value.trim()};
   localStorage.setItem(LS,JSON.stringify(cfg));
-  showMsg('設定を保存しました', true);
+  saveSharedCfg(cfg.owner, cfg.branch, cfg.token);   // 他ページでも使えるよう共有設定へ
+  showMsg('設定を保存しました(共有設定にも反映)', true);
   loadHoldings();
 };
 window.addEventListener('beforeunload',e=>{
@@ -256,6 +324,7 @@ window.addEventListener('beforeunload',e=>{
 fillCfg();
 if(!cfg.token) $('cfgBox').open=true;
 loadHoldings();
+if(cfg.token) refreshLive();   // 実ポジションも自動取得(キャッシュ表示は即時、その後最新化)
 </script>
 </body>
 </html>

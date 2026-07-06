@@ -97,9 +97,21 @@ summary{font-size:12px;color:var(--muted);cursor:pointer}
 <script>
 const $=id=>document.getElementById(id);
 const LS='position_dash_cfg2';
+// 共有設定: 1ページでPATを保存すれば全ページで使える(range_alert/holdings等と共通)
+const SHARED_CFG_LS='gh_shared_cfg';
+function loadSharedCfg(){try{return JSON.parse(localStorage.getItem(SHARED_CFG_LS)||'{}')}catch(e){return{}}}
+function saveSharedCfg(owner,branch,levelToken){
+  const s=loadSharedCfg();
+  if(owner)s.owner=owner; if(branch)s.branch=branch; if(levelToken)s.levelToken=levelToken;
+  localStorage.setItem(SHARED_CFG_LS,JSON.stringify(s));
+}
 let cfg=Object.assign(
   {owner:'edyu-bit',repo:'level',branch:'main',path:'positions.json',token:''},
   JSON.parse(localStorage.getItem(LS)||'{}'));
+(()=>{ // 自ページにトークンが無ければ共有設定から補完
+  const s=loadSharedCfg();
+  if(!cfg.token&&s.levelToken){cfg.token=s.levelToken; if(s.owner)cfg.owner=s.owner; if(s.branch)cfg.branch=s.branch;}
+})();
 
 function fillCfg(){$('cfgOwner').value=cfg.owner;$('cfgRepo').value=cfg.repo;
   $('cfgBranch').value=cfg.branch;$('cfgToken').value=cfg.token;}
@@ -108,6 +120,7 @@ $('cfgSave').onclick=()=>{
        branch:$('cfgBranch').value.trim()||'main',path:'positions.json',
        token:$('cfgToken').value.trim()};
   localStorage.setItem(LS,JSON.stringify(cfg));
+  saveSharedCfg(cfg.owner,cfg.branch,cfg.token);   // 他ページでも使えるよう共有設定へ
   load();
 };
 

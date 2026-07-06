@@ -246,9 +246,10 @@
     <div class="gh-status" id="ghStatus"></div>
     <div class="cfg-note">
       トークンはこの端末のlocalStorageのみに保存(送信先はGitHub APIだけ)。
+      <b>ここで保存すると他のページ(killzone等)でも同じ設定が使われます(共有設定)。</b>
+      保有銘柄はActionsが3時間ごとに書き出す positions.json(BingX実ポジション)から取得します。
       監視銘柄はlevelリポの range_watch.json に自動同期され、Actions側(spot_flow_scan.py)が
       15分ごとに現物Taker買い/売りを取得します。CoinGlassのキーはこのページには一切登場しません。
-      OI(建玉)データは coinglass_signals.json(保有銘柄のみ・3時間毎更新)から読みます。
     </div>
   </div>
 </details>
@@ -268,7 +269,9 @@
   </div>
   <div class="row" style="margin-top:8px">
     <button class="btn-bulk" id="bulkBtn" onclick="bulkAddHoldings()">📦 保有銘柄を一括追加(30日高安レンジ)</button>
+    <button class="btn-suggest" id="heldRefreshBtn" onclick="manualRefreshHeld()">🔄 更新</button>
   </div>
+  <div class="hint" id="heldStatus" style="margin-top:6px"></div>
   <div class="msg" id="addMsg"></div>
   <div class="hint">レンジ内→逆張り通知、ブレイクアウト→抵抗帯ラダー(フィボ拡張・ラウンドナンバー・スイング)を自動表示。現物売り越しでの上抜けは「ダマシ警戒」を出します。</div>
 </div>
@@ -330,13 +333,34 @@ function renderPresets(){
 }
 
 // ―― GitHub連携(level読み書き。CoinGlassキーはActions側のみ) ――
+// 共有設定: 全ページ同一オリジンなので、どこか1ページでPATを保存すれば全ページで使える
+const SHARED_CFG_LS='gh_shared_cfg';
+function loadSharedCfg(){try{return JSON.parse(localStorage.getItem(SHARED_CFG_LS)||'{}')}catch(e){return{}}}
+function saveSharedCfg(owner,branch,levelToken){
+  const s=loadSharedCfg();
+  if(owner)s.owner=owner; if(branch)s.branch=branch; if(levelToken)s.levelToken=levelToken;
+  localStorage.setItem(SHARED_CFG_LS,JSON.stringify(s));
+}
 const CFG_LS='range_alert_cfg';
 let cfg=Object.assign(
   {owner:'edyu-bit',repo:'level',branch:'main',token:''},
   JSON.parse(localStorage.getItem(CFG_LS)||'{}'));
-let spotFlow={}, spotFlowTs=null, cgSignals={}, cgTs=null, holdingsCache=[];
+(()=>{ // 自ページにトークンが無ければ共有設定から補完
+  const s=loadSharedCfg();
+  if(!cfg.token&&s.levelToken){cfg.token=s.levelToken; if(s.owner)cfg.owner=s.owner; if(s.branch)cfg.branch=s.branch;}
+})();
+let spotFlow={}, spotFlowTs=null, cgSignals={}, cgTs=null;
 let rwSha=null, rwLoaded=false, lastPushed="", syncTimer=null;
 const ghNotes=[];
+// 実保有銘柄(BingXポジション→positions.json→base)。共有キャッシュで開いた瞬間に即表示
+const HELD_CACHE_LS='held_positions_cache';
+let heldSyms=[], heldTs=null;
+function loadHeldCache(){
+  try{
+    const c=JSON.parse(localStorage.getItem(HELD_CACHE_LS)||'null');
+    if(c&&Array.isArray(c.bases)&&c.bases.length){heldSyms=c.bases;heldTs=c.ts||null;}
+  }catch(e){}
+}
 
 function fillCfg(){
   document.getElementById("cfgOwner").value=cfg.owner;
@@ -400,13 +424,51 @@ async function loadCoinglass(){
     if(r.text){const j=JSON.parse(r.text); cgSignals=j.signals||{}; cgTs=j.ts||null;}
   }catch(e){ /* OIは補助データなので失敗しても致命的ではない */ }
 }
-async function loadHoldings(){
-  if(!cfg.token) return;
+// 実保有銘柄の取得: positions.json(BingX実ポジション)優先 → 失敗時のみholdings.json
+async function refreshHeldSymbols(){
+  if(!cfg.token) return false;
+  try{
+    const r=await ghGetFile('positions.json');
+    const j=JSON.parse(r.text);
+    const bases=[...new Set((j.positions||[]).map(p=>p.base).filter(Boolean))];
+    if(bases.length){
+      heldSyms=bases; heldTs=(j.ts?j.ts*1000:Date.now());
+      localStorage.setItem(HELD_CACHE_LS,JSON.stringify({bases:heldSyms,ts:heldTs}));
+      renderHeldStatus();
+      return true;
+    }
+  }catch(e){ ghNote('positions読込失敗: '+e.message); }
   try{
     const r=await ghGetFile('holdings.json');
-    holdingsCache=r.text?(JSON.parse(r.text).holdings||[]):[];
-    document.getElementById("holdSyms").innerHTML=holdingsCache.map(h=>`<option value="${h}">`).join('');
-  }catch(e){ ghNote('holdings読込失敗: '+e.message); }
+    const bases=r.text?(JSON.parse(r.text).holdings||[]):[];
+    if(bases.length){
+      heldSyms=bases; heldTs=Date.now();
+      localStorage.setItem(HELD_CACHE_LS,JSON.stringify({bases:heldSyms,ts:heldTs}));
+      renderHeldStatus();
+      ghNote('保有銘柄はholdings.json(手動リスト)から取得');
+      return true;
+    }
+  }catch(e){}
+  return false;
+}
+function renderHeldStatus(){
+  const el=document.getElementById("heldStatus");
+  if(!el)return;
+  document.getElementById("holdSyms").innerHTML=heldSyms.map(h=>`<option value="${h}">`).join('');
+  if(!heldSyms.length){
+    el.textContent=cfg.token?"保有銘柄: 未取得(🔄更新を押してください)":"保有銘柄: GitHub連携が未設定です(上の⚙パネル)";
+    return;
+  }
+  const t=heldTs?new Date(heldTs).toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"}):"—";
+  el.textContent=`保有銘柄(${heldSyms.length}): ${heldSyms.join("、")} — ${t}時点のBingX実ポジション`;
+}
+async function manualRefreshHeld(){
+  const b=document.getElementById("heldRefreshBtn");
+  b.disabled=true;b.textContent="取得中…";
+  const ok=await refreshHeldSymbols();
+  renderHeldStatus();
+  if(!ok&&!cfg.token)document.getElementById("cfgBox").open=true;
+  b.disabled=false;b.textContent="🔄 更新";
 }
 // range_watch.json → 監視リストへマージ(リポ側にだけある銘柄を取り込む)
 async function loadRangeWatch(){
@@ -458,6 +520,7 @@ function saveCfg(){
        branch:document.getElementById("cfgBranch").value.trim()||'main',
        token:document.getElementById("cfgToken").value.trim()};
   localStorage.setItem(CFG_LS, JSON.stringify(cfg));
+  saveSharedCfg(cfg.owner, cfg.branch, cfg.token);   // 他ページでも使えるよう共有設定へも保存
   fillCfg();
   rwLoaded=false; rwSha=null; lastPushed="";
   initGh();
@@ -467,13 +530,13 @@ function updateGhStatus(){
   const parts=[];
   if(spotFlowTs) parts.push("flow "+new Date(spotFlowTs*1000).toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"}));
   if(cgTs) parts.push("OI "+new Date(cgTs*1000).toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"}));
-  if(holdingsCache.length) parts.push("保有"+holdingsCache.length+"銘柄");
+  if(heldSyms.length) parts.push("保有"+heldSyms.length+"銘柄");
   if(parts.length) ghNote("データ更新: "+parts.join(" / "));
 }
 async function initGh(){
-  if(!cfg.token){ document.getElementById("cfgBox").open=true; return; }
+  if(!cfg.token){ document.getElementById("cfgBox").open=true; renderHeldStatus(); return; }
   await fetchAllTickers().catch(()=>{});
-  await Promise.all([loadHoldings(), loadSpotFlow(), loadCoinglass(), loadRangeWatch()]);
+  await Promise.all([refreshHeldSymbols(), loadSpotFlow(), loadCoinglass(), loadRangeWatch()]);
   updateGhStatus();
   render();
 }
@@ -796,9 +859,9 @@ async function bulkAddHoldings(){
   if(!cfg.token){showMsg("先にGitHub連携を設定してください(上の⚙パネル)",false);document.getElementById("cfgBox").open=true;return}
   const btn=document.getElementById("bulkBtn");
   btn.disabled=true;
-  if(!holdingsCache.length) await loadHoldings();
-  const targets=holdingsCache.filter(h=>!watches.find(w=>w.sym===h));
-  if(!targets.length){showMsg("追加対象なし(保有銘柄はすべて監視中)",true);btn.disabled=false;btn.textContent="📦 保有銘柄を一括追加(30日高安レンジ)";return}
+  if(!heldSyms.length) await refreshHeldSymbols();
+  const targets=heldSyms.filter(h=>!watches.find(w=>w.sym===h));
+  if(!targets.length){showMsg(heldSyms.length?"追加対象なし(保有銘柄はすべて監視中)":"保有銘柄を取得できませんでした(🔄更新で再試行)",heldSyms.length>0);btn.disabled=false;btn.textContent="📦 保有銘柄を一括追加(30日高安レンジ)";return}
   await fetchAllTickers().catch(()=>{});
   const added=[];
   for(let i=0;i<targets.length;i++){
@@ -1521,6 +1584,7 @@ function addFromScan(inst){
 }
 
 load();loadLog();renderPresets();render();fillCfg();
+loadHeldCache();renderHeldStatus();   // キャッシュがあれば開いた瞬間に保有銘柄を即表示
 initGh();
 poll();
 setInterval(poll,POLL_MS);setInterval(tick,1000);tick();

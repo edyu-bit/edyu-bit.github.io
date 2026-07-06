@@ -65,7 +65,7 @@ border-radius:4px;padding:8px 12px;font-size:13px;margin-top:8px}
   <div class="row">
     <div style="flex:3"><label>銘柄リスト(カンマ区切り・USDT無期限)</label>
       <input id="syms" class="mono" value="XPLUSDT,1000BONKUSDT"></div>
-    <button class="ghost" id="loadHold">holdings.jsonから読込</button>
+    <button class="ghost" id="loadHold">🔄 保有銘柄を読込(BingX実ポジション)</button>
     <button id="run">スキャン</button>
   </div>
   <div class="row" style="margin-top:8px">
@@ -73,10 +73,14 @@ border-radius:4px;padding:8px 12px;font-size:13px;margin-top:8px}
       <input id="volMult" type="number" value="5" step="0.5" class="mono"></div>
     <div><label>キルゾーン認定の最低別日数</label>
       <input id="minDays" type="number" value="3" class="mono"></div>
-    <div><label>holdings.json URL(任意)</label>
-      <input id="holdUrl" class="mono"
-        value="https://raw.githubusercontent.com/edyu-bit/edyu-bit.github.io/main/holdings.json"></div>
   </div>
+  <div class="row" style="margin-top:8px" id="ghCfgRow">
+    <div style="flex:2"><label>GitHub PAT(level: Contents Read。保存すると全ページ共有)</label>
+      <input id="ghToken" type="password" class="mono" placeholder="github_pat_..."></div>
+    <div><label>Owner</label><input id="ghOwner" class="mono" value="edyu-bit"></div>
+    <button class="ghost" id="ghSave">PAT保存</button>
+  </div>
+  <div class="small" id="heldStatus" style="margin-top:6px"></div>
   <div id="prog"></div>
   <div class="err" id="err" style="display:none"></div>
 </div>
@@ -228,14 +232,80 @@ function renderToday(results){
   — 30分前に逆指値の点検を</div>`;
 }
 
-$('loadHold').onclick=async()=>{
-  try{
-    const j=await (await fetch($('holdUrl').value)).json();
-    const hs=(j.holdings||[]).map(h=>h.toUpperCase()+'USDT');
-    if(hs.length)$('syms').value=hs.join(',');
-  }catch(e){$('err').style.display='block';
-    $('err').textContent='holdings.json読込失敗: '+e.message;}
+// ―― 保有銘柄の読込: 共有設定のPATで level/positions.json(BingX実ポジション)を取得 ――
+// 共有設定(gh_shared_cfg)は range_alert.html / holdings.html 等と共通。1ページで保存すれば全ページで有効。
+const SHARED_CFG_LS='gh_shared_cfg';
+const HELD_CACHE_LS='held_positions_cache';
+function loadSharedCfg(){try{return JSON.parse(localStorage.getItem(SHARED_CFG_LS)||'{}')}catch(e){return{}}}
+function saveSharedCfg(owner,branch,levelToken){
+  const s=loadSharedCfg();
+  if(owner)s.owner=owner; if(branch)s.branch=branch; if(levelToken)s.levelToken=levelToken;
+  localStorage.setItem(SHARED_CFG_LS,JSON.stringify(s));
+}
+async function ghGetJson(path){
+  const s=loadSharedCfg();
+  if(!s.levelToken)throw new Error('GitHub PATが未設定です(下の欄で保存してください)');
+  const r=await fetch(`https://api.github.com/repos/${s.owner||'edyu-bit'}/level/contents/${path}?ref=${s.branch||'main'}`,
+    {headers:{'Accept':'application/vnd.github+json','Authorization':'Bearer '+s.levelToken}});
+  if(!r.ok)throw new Error('GitHub API '+r.status+' ('+path+')');
+  const j=await r.json();
+  const bin=atob(j.content.replace(/\n/g,''));
+  const bytes=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
+  return JSON.parse(new TextDecoder('utf-8').decode(bytes));
+}
+function renderHeldStatus(bases,ts,fromCache){
+  if(!bases||!bases.length){$('heldStatus').textContent='';return;}
+  const t=ts?new Date(ts).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}):'—';
+  $('heldStatus').innerHTML=`保有銘柄(${bases.length}): ${bases.join('、')} — ${t}時点のBingX実ポジション${fromCache?'(キャッシュ)':''}`;
+}
+function refreshCfgRow(){
+  const has=!!loadSharedCfg().levelToken;
+  $('ghCfgRow').style.display=has?'none':'flex';
+}
+$('ghSave').onclick=()=>{
+  const tk=$('ghToken').value.trim();
+  if(!tk){$('err').style.display='block';$('err').textContent='PATを入力してください';return;}
+  saveSharedCfg($('ghOwner').value.trim()||'edyu-bit','main',tk);
+  $('ghToken').value='';
+  $('err').style.display='none';
+  refreshCfgRow();
 };
+$('loadHold').onclick=async()=>{
+  $('err').style.display='none';
+  $('loadHold').disabled=true;$('loadHold').textContent='取得中…';
+  try{
+    let bases=[],ts=null;
+    try{
+      const j=await ghGetJson('positions.json');   // 実ポジション優先
+      bases=[...new Set((j.positions||[]).map(p=>p.base).filter(Boolean))];
+      ts=j.ts?j.ts*1000:Date.now();
+    }catch(e){
+      const j=await ghGetJson('holdings.json');    // フォールバック(手動リスト)
+      bases=j.holdings||[]; ts=Date.now();
+    }
+    if(!bases.length)throw new Error('保有銘柄が見つかりません');
+    localStorage.setItem(HELD_CACHE_LS,JSON.stringify({bases,ts}));
+    $('syms').value=bases.map(h=>h.toUpperCase()+'USDT').join(',');
+    renderHeldStatus(bases,ts,false);
+  }catch(e){
+    $('err').style.display='block';
+    $('err').textContent='保有銘柄の読込失敗: '+e.message;
+    refreshCfgRow();
+  }
+  $('loadHold').disabled=false;$('loadHold').textContent='🔄 保有銘柄を読込(BingX実ポジション)';
+};
+// 起動時: キャッシュがあれば即座に銘柄リストへ反映(取得が遅い時でも待たない)
+(()=>{
+  refreshCfgRow();
+  try{
+    const c=JSON.parse(localStorage.getItem(HELD_CACHE_LS)||'null');
+    if(c&&Array.isArray(c.bases)&&c.bases.length){
+      $('syms').value=c.bases.map(h=>h.toUpperCase()+'USDT').join(',');
+      renderHeldStatus(c.bases,c.ts,true);
+    }
+  }catch(e){}
+})();
 
 $('run').onclick=async()=>{
   $('err').style.display='none';$('results').innerHTML='';$('today').innerHTML='';

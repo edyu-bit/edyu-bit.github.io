@@ -244,10 +244,22 @@ padding:8px;margin-top:6px}
 <script>
 const $=id=>document.getElementById(id);
 const LS='position_planner_cfg';
+// 共有設定: levelトークンのみ共有(trade-plansのR/Wトークンは設計上このページ専用のまま)
+const SHARED_CFG_LS='gh_shared_cfg';
+function loadSharedCfg(){try{return JSON.parse(localStorage.getItem(SHARED_CFG_LS)||'{}')}catch(e){return{}}}
+function saveSharedCfg(owner,branch,levelToken){
+  const s=loadSharedCfg();
+  if(owner)s.owner=owner; if(branch)s.branch=branch; if(levelToken)s.levelToken=levelToken;
+  localStorage.setItem(SHARED_CFG_LS,JSON.stringify(s));
+}
 let cfg=Object.assign(
   {level:{owner:'edyu-bit',repo:'level',branch:'main',token:''},
    plans:{owner:'edyu-bit',repo:'trade-plans',branch:'main',token:''}},
   JSON.parse(localStorage.getItem(LS)||'{}'));
+(()=>{ // levelトークンが無ければ共有設定から補完
+  const s=loadSharedCfg();
+  if(!cfg.level.token&&s.levelToken){cfg.level.token=s.levelToken; if(s.owner)cfg.level.owner=s.owner; if(s.branch)cfg.level.branch=s.branch;}
+})();
 
 let positions=[], reviews=[], signals=[], cgSignals={}, plans=[], plansSha=null, actionsRaw='', actionsSha=null;
 
@@ -680,6 +692,7 @@ $('cfgSave').onclick=async ()=>{
            branch:$('plBranch').value.trim()||'main', token:$('plToken').value.trim()}
   };
   localStorage.setItem(LS, JSON.stringify(cfg));
+  saveSharedCfg(cfg.level.owner, cfg.level.branch, cfg.level.token);   // levelトークンのみ共有設定へ
   await loadAll();
 };
 
