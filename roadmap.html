@@ -182,15 +182,11 @@ table.eta th{color:var(--muted);font-weight:500}
     <div><b class="mono" id="statHarvests">—</b><span>収穫回数</span></div>
     <div><b class="mono" id="statDeaths">—</b><span>Pod死亡回数</span></div>
   </div>
-  <p class="small" style="margin-top:10px">マイルストーン目安(初期プランの静的値。実測ベースの動的ETA・バケット別期待値はPhase 2で実装予定)</p>
-  <table class="eta">
-    <tr><th>到達点</th><th>想定所要</th><th>主エンジン</th></tr>
-    <tr><td>100万</td><td>3〜9ヶ月</td><td>Pod量産</td></tr>
-    <tr><td>300万</td><td>8〜18ヶ月</td><td>Pod + Core複利開始</td></tr>
-    <tr><td>1000万</td><td>1.5〜3年</td><td>Core主導</td></tr>
-    <tr><td>3000万</td><td>2.5〜4.5年</td><td>Core複利</td></tr>
-    <tr><td>1億</td><td>4〜7年</td><td>Core + Podスケール実験</td></tr>
-  </table>
+  <p class="small" style="margin-top:10px">バケット別期待値(side×レジーム。「勝てているのはロング×🔥だけでは?」を数値で判定する)</p>
+  <div id="bucketStats"></div>
+  <p class="small" style="margin-top:12px">到達予測 — 実測パラメータで毎回再計算(Core月利は300万超5%・1000万超3%に自動減衰)</p>
+  <div id="etaTable"></div>
+  <p class="small" id="etaParams" style="margin-top:6px"></p>
 </div>
 
 <div class="card">
@@ -587,6 +583,99 @@ function renderStats(status){
   $('statDeaths').textContent = deaths;
   const attempts = harvests+deaths;
   $('statP').textContent = attempts>=1 ? Math.round(harvests/attempts*100)+'%'+(attempts<3?'(計測中)':'') : '計測中';
+  renderBuckets(status.actions);
+  renderEta(status.actions);
+}
+
+// ---------- バケット別期待値(side×レジーム) ----------
+function renderBuckets(actions){
+  const trades = actions.filter(a=>a.kind==='trade' && isFinite(parseFloat(a.r)));
+  if(!trades.length){
+    $('bucketStats').innerHTML = '<p class="small">タグ付きトレード記録がまだありません([トレード記録追加]から蓄積されます)</p>';
+    return;
+  }
+  const regimeLabel = {hot:'🔥', neutral:'─', cold:'❄️'};
+  const groups = {};
+  for(const t of trades){
+    const key = (t.side||'?') + '×' + (regimeLabel[t.regime]||t.regime||'?');
+    (groups[key] = groups[key]||[]).push(parseFloat(t.r));
+  }
+  const rows = Object.entries(groups).map(([k,rs])=>({
+    k, n: rs.length,
+    avg: rs.reduce((a,b)=>a+b,0)/rs.length,
+    total: rs.reduce((a,b)=>a+b,0),
+  })).sort((a,b)=>b.avg-a.avg);
+  $('bucketStats').innerHTML =
+    '<table class="eta"><tr><th>バケット</th><th>n</th><th>平均R</th><th>合計R</th></tr>' +
+    rows.map(r=>`<tr><td>${r.k}</td><td class="mono">${r.n}${r.n<10?' <span class="small">計測中</span>':''}</td>`+
+      `<td class="mono ${r.avg>=0?'ok':'up'}">${r.avg>=0?'+':''}${r.avg.toFixed(2)}R</td>`+
+      `<td class="mono">${r.total>=0?'+':''}${r.total.toFixed(1)}R</td></tr>`).join('') +
+    '</table><p class="small" style="margin-top:4px">n≥10になるまでその帯の数字は信用しない。平均Rがマイナスの帯は翌週停止が原則。</p>';
+}
+
+// ---------- 到達予測(実測パラメータ+仮定値のフォールバック) ----------
+function computeEtaParams(actions){
+  const harvests = actions.filter(a=>a.kind==='harvest');
+  const deaths = actions.filter(a=>a.kind==='pod_death');
+  const attempts = harvests.length + deaths.length;
+  const p = attempts>=3 ? harvests.length/attempts : null;
+  let cadence = null;
+  const ts = [...harvests, ...deaths].map(a=>new Date(a.ts).getTime()).filter(isFinite);
+  if(ts.length>=2){
+    const spanDays = (Math.max(...ts)-Math.min(...ts))/86400000;
+    if(spanDays>=7) cadence = attempts/(spanDays/30.44);
+  }
+  let coreR = null;
+  const c = input.core;
+  if(c.month_start_balance>0 && c.month_start_date){
+    const days = (Date.now()-new Date(c.month_start_date).getTime())/86400000;
+    if(days>=10 && c.balance>0){
+      coreR = Math.pow(c.balance/c.month_start_balance, 30.44/days) - 1;
+    }
+  }
+  return {
+    p: p??0.5, cadence: cadence??3, coreR: coreR??0.08,
+    measured: {p: p!=null, cadence: cadence!=null, coreR: coreR!=null},
+    nAttempts: attempts,
+  };
+}
+function renderEta(actions){
+  const pr = computeEtaParams(actions);
+  const HARVEST_NET = POD_HARVEST_TARGET - POD_NEXT_SEED;
+  const inflowCore = pr.cadence * pr.p * HARVEST_NET * HARVEST_CORE_SHARE_PCT/100;
+  const inflowVault = pr.cadence * pr.p * HARVEST_NET * HARVEST_VAULT_SHARE_PCT/100;
+  let core = input.core.balance||0, vault = input.vault.balance||0;
+  const pod = input.pod.balance||0;
+  const targets = [[1000000,'100万'],[3000000,'300万'],[10000000,'1000万'],[30000000,'3000万'],[100000000,'1億']];
+  const MAXM = 240;
+  const rows = [];
+  let m = 0, ti = 0;
+  while(ti<targets.length && targets[ti][0] <= pod+core+vault){ rows.push([targets[ti][1], 0]); ti++; }
+  while(ti<targets.length && m<MAXM){
+    const total = pod+core+vault;
+    const rate = total>10000000 ? Math.min(pr.coreR,0.03) : total>3000000 ? Math.min(pr.coreR,0.05) : pr.coreR;
+    core = core*(1+rate) + inflowCore;
+    vault += inflowVault;
+    m++;
+    while(ti<targets.length && pod+core+vault >= targets[ti][0]){ rows.push([targets[ti][1], m]); ti++; }
+  }
+  const now = new Date();
+  const fmt = mm => {
+    if(mm===0) return '到達済み';
+    const d = new Date(now.getFullYear(), now.getMonth()+mm, 1);
+    return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}(約${mm<24?mm+'ヶ月':(mm/12).toFixed(1)+'年'})`;
+  };
+  $('etaTable').innerHTML =
+    '<table class="eta"><tr><th>到達点</th><th>予測</th></tr>' +
+    rows.map(([label,mm])=>`<tr><td>${label}</td><td class="mono">${fmt(mm)}</td></tr>`).join('') +
+    (ti<targets.length ? targets.slice(ti).map(t=>`<tr><td>${t[1]}</td><td class="mono">20年+</td></tr>`).join('') : '') +
+    '</table>';
+  const tag = ok => ok ? '' : '<span class="warn">(仮定値)</span>';
+  $('etaParams').innerHTML =
+    `パラメータ: p ${(pr.p*100).toFixed(0)}%${pr.measured.p?`(実測 n=${pr.nAttempts})`:tag(false)} / `+
+    `Pod ${pr.cadence.toFixed(1)}本/月${tag(pr.measured.cadence)} / `+
+    `Core月利 ${(pr.coreR*100).toFixed(1)}%${tag(pr.measured.coreR)}`+
+    ` — 実測が溜まるほど予測が現実に寄る。保証値ではない。`;
 }
 
 function renderHistory(){
