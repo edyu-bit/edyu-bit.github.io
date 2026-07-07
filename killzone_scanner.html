@@ -77,6 +77,7 @@ border-radius:4px;padding:8px 12px;font-size:13px;margin-top:8px}
       <input id="volMult" type="number" value="5" step="0.5" class="mono"></div>
     <div><label>キルゾーン認定の最低別日数</label>
       <input id="minDays" type="number" value="3" class="mono"></div>
+    <button class="ghost small" id="ghChangeBtn" type="button">🔑 PAT変更</button>
   </div>
   <div class="row" style="margin-top:8px" id="ghCfgRow">
     <div style="flex:2"><label>GitHub PAT(level: Contents Read。保存すると全ページ共有)</label>
@@ -266,6 +267,7 @@ function renderHeldStatus(bases,ts,fromCache){
 function refreshCfgRow(){
   const has=!!loadSharedCfg().levelToken;
   $('ghCfgRow').style.display=has?'none':'flex';
+  $('ghChangeBtn').style.display=has?'inline-block':'none';
 }
 $('ghSave').onclick=()=>{
   const tk=$('ghToken').value.trim();
@@ -274,6 +276,11 @@ $('ghSave').onclick=()=>{
   $('ghToken').value='';
   $('err').style.display='none';
   refreshCfgRow();
+};
+// 保存済みでも押せば再度入力欄を開ける(間違ったPATを保存した場合の復旧手段)
+$('ghChangeBtn').onclick=()=>{
+  $('ghCfgRow').style.display='flex';
+  $('ghChangeBtn').style.display='none';
 };
 $('loadHold').onclick=async()=>{
   $('err').style.display='none';
@@ -294,8 +301,10 @@ $('loadHold').onclick=async()=>{
     renderHeldStatus(bases,ts,false);
   }catch(e){
     $('err').style.display='block';
-    $('err').textContent='保有銘柄の読込失敗: '+e.message;
-    refreshCfgRow();
+    $('err').textContent='保有銘柄の読込失敗: '+e.message+'(PATが誤っている可能性 — 下の[PAT変更]から入れ直してください)';
+    // 失敗時は保存済みでも入力欄を出す(誤ったPATを直せるようにする)
+    $('ghCfgRow').style.display='flex';
+    $('ghChangeBtn').style.display='none';
   }
   $('loadHold').disabled=false;$('loadHold').textContent='🔄 保有銘柄を読込(BingX実ポジション)';
 };
