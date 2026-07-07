@@ -29,7 +29,8 @@ border-radius:6px;padding:14px}
 .big{font-size:26px;font-weight:700}
 .sub{font-size:11px;color:var(--muted);margin-top:4px}
 .section{margin-bottom:16px}
-.section>h2{font-size:12px;color:var(--accent);letter-spacing:.06em;margin:14px 0 10px}
+.section>h2{font-size:12px;color:var(--accent);letter-spacing:.06em;margin:14px 0 10px;
+display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .up{color:var(--up)}.down{color:var(--down)}.warn{color:var(--warn)}.ok{color:var(--ok)}
 table{width:100%;border-collapse:collapse;font-size:12px}
 th{text-align:left;color:var(--muted);font-weight:500;font-size:11px;
@@ -56,19 +57,52 @@ summary{font-size:12px;color:var(--muted);cursor:pointer}
 .headline:last-child{border-bottom:none}
 .headline a{color:var(--text);text-decoration:none}
 .headline a:hover{color:var(--accent)}
-.sector-grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
-.sector-card{background:linear-gradient(160deg,var(--panel2),var(--panel));
-border:1px solid var(--border);border-left:3px solid var(--border);
-border-radius:8px;padding:14px;box-shadow:0 2px 10px rgba(0,0,0,.25)}
-.sector-card.ok{border-left-color:var(--ok)}
-.sector-card.up{border-left-color:var(--up)}
-.sector-head{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--muted);
-letter-spacing:.05em;text-transform:uppercase}
-.sector-icon{font-size:17px;filter:saturate(1.3)}
-.sector-chg{font-size:26px;font-weight:800;margin:8px 0 6px;display:flex;align-items:baseline;gap:5px}
-.sector-arrow{font-size:15px}
-.sector-bar{height:5px;background:rgba(255,255,255,.07);border-radius:3px;overflow:hidden;margin-top:8px}
-.sector-bar div{height:100%;border-radius:3px;transition:width .4s ease}
+
+/* リスク温度計 */
+.thermo{border-radius:8px;padding:14px;border:1px solid var(--border);background:var(--panel)}
+.thermo-top{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.thermo-score{font-size:34px;font-weight:800}
+.thermo-band{font-size:12px;font-weight:700;padding:3px 10px;border-radius:12px}
+.thermo-ts{margin-left:auto}
+.thermo.band-risk_on{border-color:var(--ok)}
+.thermo.band-neutral{border-color:var(--border)}
+.thermo.band-caution{border-color:var(--warn)}
+.thermo.band-risk_off{border-color:var(--up)}
+.band-risk_on .thermo-band{background:rgba(125,211,160,.15);color:var(--ok)}
+.band-neutral .thermo-band{background:rgba(107,120,137,.2);color:var(--muted)}
+.band-caution .thermo-band{background:rgba(255,180,84,.15);color:var(--warn)}
+.band-risk_off .thermo-band{background:rgba(255,92,92,.15);color:var(--up)}
+.thermo-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chip{font-size:11px;padding:3px 8px;border-radius:10px;background:var(--panel2);border:1px solid var(--border)}
+.chip b{margin-left:4px}
+.banner-asia{background:rgba(255,92,92,.1);border:1px solid var(--up);color:var(--up);
+border-radius:5px;padding:8px 12px;margin-top:10px;font-size:12px}
+
+/* セッション時計 */
+.session-grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(110px,1fr))}
+.session-card{background:var(--panel2);border:1px solid var(--border);border-radius:6px;
+padding:10px;text-align:center}
+.session-card.open{border-color:var(--ok)}
+.session-label{font-size:12px;color:var(--muted)}
+.session-state{font-size:13px;font-weight:700;margin-top:4px}
+.session-state.ok{color:var(--ok)}
+
+/* イベントカウントダウン */
+.cal-row{padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;
+display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px}
+.cal-row:last-child{border-bottom:none}
+.cal-row.fomc{color:var(--accent)}
+
+.sec-ts{font-size:11px;color:var(--muted);font-weight:400}
+.sec-ts.stale{color:var(--warn)}
+.badge-asia{font-size:9px;padding:1px 5px;border-radius:3px;
+background:rgba(232,196,112,.15);color:var(--accent);margin-left:4px}
+
+/* 長期セクション */
+.spark{width:100%;height:40px;margin-top:8px}
+.halving-bar{height:8px;background:var(--panel2);border:1px solid var(--border);
+border-radius:4px;overflow:hidden;margin-top:8px}
+.halving-bar div{height:100%;background:var(--accent)}
 </style>
 </head>
 <body>
@@ -78,10 +112,56 @@ letter-spacing:.05em;text-transform:uppercase}
 </header>
 <main>
 
+<!-- [1] リスク温度計 -->
 <div class="section">
-  <h2>暗号資産:方向感(CoinGecko)</h2>
-  <div class="grid">
-    <div class="card"><h3>BTC(24h / 7d)</h3>
+  <div class="thermo" id="thermoCard">
+    <div class="thermo-top">
+      <div class="thermo-score mono" id="thermoScore">—</div>
+      <div class="thermo-band" id="thermoBand"></div>
+      <div class="thermo-ts small mono" id="thermoTs"></div>
+    </div>
+    <div class="thermo-chips" id="thermoChips"></div>
+  </div>
+  <div id="asiaAlertBanner"></div>
+</div>
+
+<!-- [2] セッション時計 -->
+<div class="section">
+  <h2>⏱ セッション(JST基準)</h2>
+  <div class="session-grid" id="sessionGrid"></div>
+</div>
+
+<!-- [3] 直近イベント -->
+<div class="section">
+  <h2>📅 直近イベント(48時間以内・FOMCは常設) <span class="sec-ts qts"></span></h2>
+  <div class="card" id="calendarList"><p class="small">下の接続設定でトークンを入力してください</p></div>
+</div>
+
+<!-- [4] 短期 — アジア -->
+<div class="section">
+  <h2>短期 — アジア <span class="sec-ts qts"></span></h2>
+  <div class="grid" id="quotesAsiaGrid"></div>
+</div>
+
+<!-- [5] 短期 — 米国 -->
+<div class="section">
+  <h2>短期 — 米国 <span class="sec-ts qts"></span></h2>
+  <div class="grid" id="quotesUsGrid"></div>
+</div>
+
+<!-- [6] 短期 — 半導体(グローバル) -->
+<div class="section">
+  <h2>短期 — 半導体(グローバル) <span class="sec-ts qts"></span></h2>
+  <div class="grid" id="quotesSemisGrid"></div>
+</div>
+
+<!-- [7] 短期 — クリプト固有 -->
+<div class="section">
+  <h2>短期 — クリプト固有 <span class="sec-ts qts"></span></h2>
+  <div class="grid" id="cryptoQuotesExtra"></div>
+
+  <div class="grid" style="margin-top:12px">
+    <div class="card"><h3>BTC(24h / 7d、CoinGecko)</h3>
       <div class="big mono" id="btcChg">—</div><div class="sub" id="btcChgNote"></div></div>
     <div class="card"><h3>アルト(対BTC、上位100中央値)</h3>
       <div class="big mono" id="altDelta">—</div><div class="sub" id="altDeltaNote"></div></div>
@@ -95,73 +175,79 @@ letter-spacing:.05em;text-transform:uppercase}
     <div class="card"><h3>BTC Long/Short比率(CoinGlass)</h3>
       <div class="big mono" id="btcLsRatio">—</div><div class="sub" id="btcLsRatioNote">要トークン</div></div>
   </div>
-</div>
 
-<div class="section">
-  <h2>ドミナンス構造(CoinGecko)</h2>
-  <div class="grid">
-    <div class="card"><h3>BTCドミナンス</h3>
-      <div class="big mono" id="btcd">—</div><div class="sub" id="btcdNote"></div></div>
-    <div class="card"><h3>ETHドミナンス</h3>
-      <div class="big mono" id="ethd">—</div><div class="sub"></div></div>
-    <div class="card"><h3>ステーブル比率(USDT+USDC)</h3>
-      <div class="big mono" id="stbl">—</div>
-      <div class="sub" id="stblNote"></div></div>
-  </div>
   <div class="card" style="margin-top:12px">
-    <h3>市場構成</h3>
-    <div class="bar" id="domBar"></div>
+    <h3>市場構成(ドミナンス)</h3>
+    <div class="grid">
+      <div><h3>BTCドミナンス</h3><div class="big mono" id="btcd">—</div><div class="sub" id="btcdNote"></div></div>
+      <div><h3>ETHドミナンス</h3><div class="big mono" id="ethd">—</div></div>
+      <div><h3>ステーブル比率(USDT+USDC)</h3><div class="big mono" id="stbl">—</div><div class="sub" id="stblNote"></div></div>
+    </div>
+    <div class="bar" id="domBar" style="margin-top:12px"></div>
     <p class="small" style="margin-top:6px">
       <span class="up">■BTC</span> <span style="color:#9d7dd3">■ETH</span>
       <span class="ok">■ステーブル</span> <span class="warn">■その他アルト</span>
       — ステーブル比率上昇=待機資金増(下落時は逃避、底値圏では燃料)</p>
   </div>
-</div>
 
-<div class="section">
-  <h2>オプション市場(Deribit・BTC)</h2>
-  <div class="grid">
-    <div class="card"><h3>DVOL(30日IV指数)</h3>
-      <div class="big mono" id="dvol">—</div><div class="sub" id="dvolNote"></div></div>
-    <div class="card"><h3>Put/Call出来高比</h3>
-      <div class="big mono" id="pcr">—</div>
-      <div class="sub" id="pcrNote"></div></div>
-    <div class="card"><h3>25Δスキュー近似</h3>
-      <div class="big mono" id="skew">—</div>
-      <div class="sub">プット遠OTMのIV − コール遠OTMのIV。プラス=下落ヘッジ需要優勢</div></div>
-    <div class="card"><h3>BTC Max Pain(CoinGlass)</h3>
-      <div class="big mono" id="btcMaxPain">—</div><div class="sub">要トークン</div></div>
-    <div class="card"><h3>ETH Max Pain(CoinGlass)</h3>
-      <div class="big mono" id="ethMaxPain">—</div><div class="sub">要トークン</div></div>
-  </div>
   <div class="card" style="margin-top:12px">
-    <h3>出来高急増オプション(24h上位)</h3>
-    <table><thead><tr><th>銘柄</th><th>種別</th><th>24h出来高(BTC)</th><th>OI</th><th>Mark IV</th></tr></thead>
+    <h3>オプション市場(Deribit・BTC)</h3>
+    <div class="grid">
+      <div><h3>DVOL(30日IV指数)</h3><div class="big mono" id="dvol">—</div><div class="sub" id="dvolNote"></div></div>
+      <div><h3>Put/Call出来高比</h3><div class="big mono" id="pcr">—</div><div class="sub" id="pcrNote"></div></div>
+      <div><h3>25Δスキュー近似</h3><div class="big mono" id="skew">—</div>
+        <div class="sub">プット遠OTMのIV − コール遠OTMのIV。プラス=下落ヘッジ需要優勢</div></div>
+      <div><h3>BTC Max Pain(CoinGlass)</h3><div class="big mono" id="btcMaxPain">—</div><div class="sub">要トークン</div></div>
+      <div><h3>ETH Max Pain(CoinGlass)</h3><div class="big mono" id="ethMaxPain">—</div><div class="sub">要トークン</div></div>
+    </div>
+    <table style="margin-top:12px"><thead><tr><th>銘柄</th><th>種別</th><th>24h出来高(BTC)</th><th>OI</th><th>Mark IV</th></tr></thead>
     <tbody id="optBody"><tr><td colspan="5" class="small">読み込み中…</td></tr></tbody></table>
     <p class="small" style="margin-top:6px">特定の行使価格に出来高が集中=大口がそのラインを意識。
     満期日と行使価格はマグネット/防衛ラインの候補</p>
   </div>
-</div>
 
-<div class="section">
-  <h2>清算・ETF資金フロー(CoinGlass、要トークン)</h2>
-  <div class="grid" id="liqEtfGrid">
-    <div class="card"><h3>—</h3><div class="sub">下の接続設定でトークンを入力してください</div></div>
+  <div class="grid" style="margin-top:12px" id="liqEtfGrid">
+    <div class="card"><h3>清算・ETF資金フロー</h3><div class="sub">下の接続設定でトークンを入力してください</div></div>
   </div>
 </div>
 
+<!-- [8] 長期 — 流動性 -->
 <div class="section">
-  <h2>伝統市場セクター(要トークン)</h2>
-  <div class="sector-grid" id="equitiesGrid">
-    <div class="card"><h3>—</h3><div class="sub">下の接続設定でトークンを入力してください</div></div>
+  <h2>長期 — 流動性 <span class="sec-ts fred-warn warn"></span></h2>
+  <div class="card">
+    <h3>ネット流動性(WALCL − RRP − TGA)</h3>
+    <div class="big mono" id="netLiqVal">—</div>
+    <div class="sub" id="netLiqChg"></div>
+    <svg class="spark" id="netLiqSpark"></svg>
+  </div>
+  <div class="grid" style="margin-top:12px" id="liqArrowsGrid"></div>
+</div>
+
+<!-- [9] 長期 — 実体経済とサイクル -->
+<div class="section">
+  <h2>長期 — 実体経済とサイクル <span class="sec-ts fred-warn warn"></span></h2>
+  <div class="grid">
+    <div class="card"><h3>CPI(前年比)</h3><div class="big mono" id="cpiVal">—</div><div class="sub" id="cpiNote"></div></div>
+    <div class="card"><h3>失業率</h3><div class="big mono" id="unrateVal">—</div><div class="sub" id="unrateNote"></div></div>
+    <div class="card"><h3>10Y-3M</h3><div class="big mono" id="curveStateVal">—</div><div class="sub" id="curveStateNote"></div></div>
+    <div class="card"><h3>BTC 200日MA乖離</h3><div class="big mono" id="btc200dVal">—</div>
+      <div class="sub" id="btc200dNote"></div>
+      <div class="halving-bar"><div id="halvingBar" style="width:0%"></div></div></div>
+    <div class="card"><h3>S&P500 200日MA乖離</h3><div class="big mono" id="spx200dVal">—</div></div>
   </div>
 </div>
 
+<!-- [10] ニュース -->
 <div class="section">
-  <h2>アラブマネー(湾岸SWF)見出し(要トークン)</h2>
-  <div class="card" id="headlinesBox"><p class="small">下の接続設定でトークンを入力してください</p></div>
+  <h2>📰 トランプ一族×クリプト</h2>
+  <div class="card" id="trumpNewsBox"><p class="small">下の接続設定でトークンを入力してください</p></div>
+</div>
+<div class="section" id="gulfSection" style="display:none">
+  <h2>📰 湾岸SWF(大型投資のみ)</h2>
+  <div class="card" id="gulfNewsBox"></div>
 </div>
 
+<!-- [11] 接続設定 -->
 <div class="section">
   <details id="cfgBox">
     <summary>接続設定(初回のみ、level読み取り専用PAT)</summary>
@@ -195,8 +281,6 @@ function chgClass(v){return v>0?'ok':v<0?'up':''}
 function chgSign(v){return v>0?'+'+v.toFixed(2):v.toFixed(2)}
 function chgColor(v){return v>0?'var(--ok)':v<0?'var(--up)':'var(--muted)'}
 function chgArrow(v){return v>0?'▲':v<0?'▼':'—'}
-const SECTOR_ICONS={nikkei225:'📈',semiconductor_sox:'💻',datacenter_eqix:'🖥️',
-  power_tepco:'⚡',power_kepco:'⚡',energy_wti:'🛢️',crypto_treasury_jp:'₿'};
 
 // ---------- 接続設定(level読み取り専用) ----------
 // 共有設定: 1ページでPATを保存すれば全ページで使える(range_alert/holdings等と共通)
@@ -235,6 +319,271 @@ async function ghGetFile(path){
   return b64ToUtf8(j.content);
 }
 
+// ---------- macro_quotes.json / macro_long.json (Phase1/2成果) ----------
+let mqData=null, mlData=null;
+
+function jstTsLabel(ts){
+  if(!ts) return '';
+  const d=new Date((ts+9*3600)*1000);
+  return `${d.getUTCMonth()+1}/${d.getUTCDate()} ${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')} JST`;
+}
+function fredStale(){
+  if(!mlData) return true;
+  const ts=mlData.fred_ts;
+  return !ts || (Date.now()/1000-ts)>48*3600;
+}
+function updateSectionTs(){
+  const qStale = !mqData || (Date.now()/1000-mqData.ts)>90*60;
+  const qTs = mqData? jstTsLabel(mqData.ts):'';
+  document.querySelectorAll('.qts').forEach(el=>{
+    el.textContent = qTs + (qStale&&mqData?' ⚠':'');
+    el.className='sec-ts qts'+(qStale?' stale':'');
+  });
+  const fStale=fredStale();
+  document.querySelectorAll('.fred-warn').forEach(el=>{
+    el.textContent = fStale? '⚠ FRED鮮度低下(前回値の可能性)':'';
+  });
+}
+
+// ---------- [1] リスク温度計 ----------
+const BAND_LABEL={risk_on:'リスクオン',neutral:'中立',caution:'リスクオフ警戒',risk_off:'全面リスクオフ'};
+function renderThermo(){
+  const r=(mqData&&mqData.risk)||null;
+  if(!r){
+    $('thermoScore').textContent='—'; $('thermoBand').textContent='';
+    $('thermoCard').className='thermo'; $('thermoChips').innerHTML='';
+    $('asiaAlertBanner').innerHTML='';
+    $('thermoTs').textContent='';
+    return;
+  }
+  $('thermoScore').textContent=Math.round(r.score);
+  $('thermoBand').textContent=BAND_LABEL[r.band]||r.band;
+  $('thermoCard').className='thermo band-'+r.band;
+  const comps=(r.components||[]).slice().sort((a,b)=>Math.abs(b.pts)-Math.abs(a.pts));
+  $('thermoChips').innerHTML=comps.map(c=>
+    `<span class="chip">${c.label} ${c.missing?'欠損':chgSign(c.raw)+'%'} `+
+    `<b class="${c.pts>=0?'up':'ok'}">${c.pts>=0?'+':''}${c.pts.toFixed(1)}</b></span>`
+  ).join('');
+  const alerts=mqData.asia_alert||[];
+  $('asiaAlertBanner').innerHTML = alerts.length
+    ? `<div class="banner-asia">⚠ アジア異変: ${alerts.join(', ')}</div>` : '';
+  const stale=(Date.now()/1000-mqData.ts)>90*60;
+  $('thermoTs').textContent = jstTsLabel(mqData.ts) + (stale?' ⚠':'');
+}
+
+// ---------- [2] セッション時計 ----------
+const SESSIONS=[
+  {label:'東京',tz:'Asia/Tokyo',open:[9,0],close:[15,0]},
+  {label:'香港',tz:'Asia/Hong_Kong',open:[9,30],close:[16,0]},
+  {label:'ロンドン',tz:'Europe/London',open:[8,0],close:[16,30]},
+  {label:'NY',tz:'America/New_York',open:[9,30],close:[16,0]},
+];
+function localHM(tz){
+  const parts=new Intl.DateTimeFormat('en-US',{timeZone:tz,hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date());
+  const h=+parts.find(p=>p.type==='hour').value, m=+parts.find(p=>p.type==='minute').value;
+  return h*60+m;
+}
+function renderSessions(){
+  $('sessionGrid').innerHTML=SESSIONS.map(s=>{
+    const cur=localHM(s.tz), o=s.open[0]*60+s.open[1], c=s.close[0]*60+s.close[1];
+    const isOpen=cur>=o&&cur<c;
+    return `<div class="session-card ${isOpen?'open':''}">
+      <div class="session-label">${s.label}</div>
+      <div class="session-state ${isOpen?'ok':'small'}">${isOpen?'● OPEN':'closed'}</div>
+    </div>`;
+  }).join('');
+}
+
+// ---------- [3] 直近イベント ----------
+function fmtCountdown(sec){
+  if(sec<0) return '経過済み';
+  const h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60);
+  if(h>24) return Math.floor(h/24)+'日'+(h%24)+'時間後';
+  if(h>0) return `${h}時間${m}分後`;
+  return `${m}分後`;
+}
+function renderCalendar(){
+  const box=$('calendarList');
+  if(!cfg.token){ box.innerHTML='<p class="small">下の接続設定でトークンを入力してください</p>'; return; }
+  if(!mlData){ box.innerHTML='<p class="small">macro_long.json未取得</p>'; return; }
+  const now=Date.now()/1000;
+  const all=mlData.calendar||[];
+  const fomc=all.filter(e=>e.is_fomc).sort((a,b)=>a.ts_utc-b.ts_utc);
+  const upcoming=all.filter(e=>!e.is_fomc && e.ts_utc>=now-3600 && e.ts_utc<=now+48*3600)
+    .sort((a,b)=>a.ts_utc-b.ts_utc);
+  const rows=[...fomc,...upcoming];
+  if(!rows.length){ box.innerHTML='<p class="small">48時間以内の主要イベントはありません</p>'; return; }
+  box.innerHTML=rows.map(e=>{
+    const diff=e.ts_utc-now;
+    const jst=new Date((e.ts_utc+9*3600)*1000);
+    const jstStr=`${jst.getUTCMonth()+1}/${jst.getUTCDate()} ${String(jst.getUTCHours()).padStart(2,'0')}:${String(jst.getUTCMinutes()).padStart(2,'0')}`;
+    return `<div class="cal-row ${e.is_fomc?'fomc':''}">
+      <div>${e.is_fomc?'🏛 ':''}<b>${e.title}</b> <span class="small">(${e.country}・${e.impact})</span></div>
+      <div class="small mono">${jstStr} JST — ${fmtCountdown(diff)}</div>
+    </div>`;
+  }).join('');
+}
+
+// ---------- [4][5][6] 短期相場(macro_quotes.quotes) ----------
+const QUOTE_GROUPS={
+  asia:['^HSI','000001.SS','^KS11','^N225','CNH=X','KRW=X','JPY=X'],
+  us:['ES=F','NQ=F','^TNX','^IRX','^FVX','DX-Y.NYB','^VIX','^MOVE','GC=F','CL=F'],
+  semis:['^SOX','NVDA','TSM','2330.TW','000660.KS','005930.KS'],
+};
+const ASIA_TIME_SYMS=new Set(['2330.TW','000660.KS','005930.KS']);
+function renderQuoteCard(sym,q){
+  if(!q) return `<div class="card"><h3>${sym}</h3><div class="sub">データなし</div></div>`;
+  const badge=ASIA_TIME_SYMS.has(sym)?'<span class="badge-asia">アジア時間</span>':'';
+  return `<div class="card"><h3>${q.name}${badge}</h3>
+    <div class="big mono ${chgClass(q.chg_pct)}">${chgArrow(q.chg_pct)} ${chgSign(q.chg_pct)}%</div>
+    <div class="sub mono">${q.price}</div></div>`;
+}
+function renderQuoteGroup(elId,syms){
+  const quotes=(mqData&&mqData.quotes)||{};
+  if(!cfg.token){ $(elId).innerHTML='<div class="card"><h3>—</h3><div class="sub">下の接続設定でトークンを入力してください</div></div>'; return; }
+  $(elId).innerHTML=syms.map(s=>renderQuoteCard(s,quotes[s])).join('');
+}
+function renderUsExtra(){
+  if(!mqData) return '';
+  const d=mqData.derived||{};
+  return `<div class="card"><h3>10Y-3Mスプレッド</h3>
+    <div class="big mono ${chgClass(-d.y10_3m_bp)}">${d.y10_3m_bp!=null?d.y10_3m_bp.toFixed(1)+'bp':'—'}</div>
+    <div class="sub">${d.y10_3m_bp!=null?(d.y10_3m_bp<0?'逆イールド':'正常'):''} / 10年債前日比 ${d.yield10_chg_bp!=null?chgSign(d.yield10_chg_bp)+'bp':'—'}</div></div>`;
+}
+
+// ---------- [7] クリプト固有の追加カード(キムチ/BTC24h) ----------
+function renderCryptoQuotesExtra(){
+  if(!cfg.token){ $('cryptoQuotesExtra').innerHTML=''; return; }
+  if(!mqData){ $('cryptoQuotesExtra').innerHTML=''; return; }
+  const d=mqData.derived||{};
+  const kimchi=d.kimchi_pct;
+  const strong=kimchi!=null&&Math.abs(kimchi)>1;
+  $('cryptoQuotesExtra').innerHTML=`
+  <div class="card"><h3>キムチプレミアム</h3>
+    <div class="big mono ${chgClass(kimchi)}" style="${strong?'text-decoration:underline':''}">${kimchi!=null?chgSign(kimchi)+'%':'—'}</div>
+    <div class="sub">${kimchi==null?'—':(kimchi<0?'国内(韓国)安 — 裁定売り圧':'国内(韓国)高 — 裁定買い需要')}</div></div>
+  <div class="card"><h3>BTC(Bitget現物24h)</h3>
+    <div class="big mono ${chgClass(d.btc_chg_24h)}">${d.btc_chg_24h!=null?chgSign(d.btc_chg_24h)+'%':'—'}</div></div>`;
+}
+
+async function loadMacroQuotes(){
+  if(!cfg.token){ mqData=null; renderThermo(); renderQuoteGroup('quotesAsiaGrid',QUOTE_GROUPS.asia);
+    renderQuoteGroup('quotesUsGrid',QUOTE_GROUPS.us); renderQuoteGroup('quotesSemisGrid',QUOTE_GROUPS.semis);
+    renderCryptoQuotesExtra(); return; }
+  try{
+    const text=await ghGetFile('macro_quotes.json');
+    mqData=text?JSON.parse(text):null;
+  }catch(e){ fail('macro_quotes.json',e); mqData=null; }
+  renderThermo();
+  renderQuoteGroup('quotesAsiaGrid',QUOTE_GROUPS.asia);
+  renderQuoteGroup('quotesUsGrid',QUOTE_GROUPS.us);
+  if(mqData) $('quotesUsGrid').innerHTML += renderUsExtra();
+  renderQuoteGroup('quotesSemisGrid',QUOTE_GROUPS.semis);
+  renderCryptoQuotesExtra();
+}
+
+// ---------- [8] 長期 — 流動性 ----------
+function arrow(pct){ if(pct==null) return '→'; return pct>0?'▲':pct<0?'▼':'→'; }
+function renderSparkline(series){
+  const svg=$('netLiqSpark');
+  if(!series||!series.length){ svg.innerHTML=''; return; }
+  const w=600,h=40,pad=2;
+  const min=Math.min(...series), max=Math.max(...series);
+  const range=(max-min)||1;
+  const pts=series.map((v,i)=>{
+    const x=pad+i*(w-2*pad)/((series.length-1)||1);
+    const y=h-pad-((v-min)/range)*(h-2*pad);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  svg.setAttribute('viewBox',`0 0 ${w} ${h}`);
+  svg.setAttribute('preserveAspectRatio','none');
+  svg.innerHTML=`<polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="2"/>`;
+}
+function renderLiquidity(){
+  if(!cfg.token){
+    $('netLiqVal').textContent='—'; $('netLiqChg').textContent='';
+    $('netLiqSpark').innerHTML=''; $('liqArrowsGrid').innerHTML=
+      '<div class="card"><h3>—</h3><div class="sub">下の接続設定でトークンを入力してください</div></div>';
+    return;
+  }
+  const liq=(mlData&&mlData.liquidity)||{};
+  const net=liq.net_liquidity_bn||{};
+  $('netLiqVal').textContent=net.latest!=null?net.latest.toLocaleString()+'bn':'—';
+  $('netLiqVal').className='big mono '+chgClass(net.chg_13w_pct);
+  $('netLiqChg').textContent=net.chg_13w_pct!=null?`13週比 ${chgSign(net.chg_13w_pct)}%`:'';
+  renderSparkline(net.series_13w);
+  const rows=[['walcl_bn','WALCL(Fed総資産)','chg_13w_pct'],['rrp_bn','RRP(リバースレポ)','chg_13w_pct'],
+    ['tga_bn','TGA(財務省口座)','chg_13w_pct'],['m2_bn','M2','yoy_pct']];
+  $('liqArrowsGrid').innerHTML=rows.map(([k,label,pctKey])=>{
+    const v=liq[k]||{}; const pct=v[pctKey];
+    return `<div class="card"><h3>${label}</h3>
+      <div class="big mono">${arrow(pct)}</div>
+      <div class="sub mono">${v.latest!=null?v.latest.toLocaleString()+'bn':'—'}</div></div>`;
+  }).join('');
+}
+
+// ---------- [9] 長期 — 実体経済とサイクル ----------
+const TREND_ARROW={up:'▲',down:'▼',flat:'→'};
+function renderMacroCycle(){
+  if(!cfg.token){
+    ['cpiVal','unrateVal','curveStateVal','btc200dVal','spx200dVal'].forEach(id=>$(id).textContent='—');
+    ['cpiNote','unrateNote','curveStateNote','btc200dNote'].forEach(id=>$(id).textContent='');
+    $('halvingBar').style.width='0%';
+    return;
+  }
+  const inf=(mlData&&mlData.inflation)||{}, unr=(mlData&&mlData.unrate)||{},
+        curve=(mlData&&mlData.curve)||{}, btc=(mlData&&mlData.btc_cycle)||{},
+        spx=mlData?mlData.spx_vs_200d_pct:null;
+  $('cpiVal').textContent=inf.cpi_yoy_pct!=null?chgSign(inf.cpi_yoy_pct)+'%':'—';
+  $('cpiNote').textContent=inf.trend?`直近3ヶ月 ${TREND_ARROW[inf.trend]||''}${inf.trend}`:'';
+  $('unrateVal').textContent=unr.latest!=null?unr.latest.toFixed(1)+'%':'—';
+  $('unrateNote').textContent=unr.trend?`直近3ヶ月 ${TREND_ARROW[unr.trend]||''}${unr.trend}`:'';
+  $('curveStateVal').textContent=curve.y10_3m_bp!=null?curve.y10_3m_bp.toFixed(1)+'bp':'—';
+  $('curveStateNote').textContent=curve.state==='inverted'?'逆イールド継続中':
+    (curve.state==='normal'&&curve.days_since_uninvert!=null)?`解消から${curve.days_since_uninvert}日`:'—';
+  $('btc200dVal').textContent=btc.vs_200d_pct!=null?chgSign(btc.vs_200d_pct)+'%':'—';
+  $('btc200dVal').className='big mono '+chgClass(btc.vs_200d_pct);
+  const cycleProg=(btc.days_since_halving!=null&&btc.days_to_next_halving_est!=null)
+    ?Math.max(0,Math.min(100,btc.days_since_halving/(btc.days_since_halving+btc.days_to_next_halving_est)*100)):0;
+  $('halvingBar').style.width=cycleProg+'%';
+  $('btc200dNote').textContent=btc.days_since_halving!=null
+    ?`半減期から${btc.days_since_halving}日(次まで約${btc.days_to_next_halving_est}日)`:'';
+  $('spx200dVal').textContent=spx!=null?chgSign(spx)+'%':'—';
+  $('spx200dVal').className='big mono '+chgClass(spx);
+}
+
+// ---------- [10] ニュース ----------
+function renderNews(){
+  if(!cfg.token){
+    $('trumpNewsBox').innerHTML='<p class="small">下の接続設定でトークンを入力してください</p>';
+    $('gulfSection').style.display='none';
+    return;
+  }
+  const trump=(mlData&&mlData.trump_news)||[];
+  $('trumpNewsBox').innerHTML=trump.length?trump.map(n=>
+    `<div class="headline"><a href="${n.link}" target="_blank" rel="noopener">${n.title}</a>
+      <div class="small">スコア${n.score} ・ ${n.ts?new Date(n.ts*1000).toLocaleString('ja-JP'):''}</div></div>`
+  ).join(''):'<p class="small">直近72時間の該当ニュースなし</p>';
+
+  const gulf=(mlData&&mlData.gulf_news)||[];
+  $('gulfSection').style.display=gulf.length?'':'none';
+  if(gulf.length){
+    $('gulfNewsBox').innerHTML=gulf.map(n=>
+      `<div class="headline"><a href="${n.link}" target="_blank" rel="noopener">${n.title}</a></div>`
+    ).join('');
+  }
+}
+
+async function loadMacroLong(){
+  if(!cfg.token){ mlData=null; renderCalendar(); renderLiquidity(); renderMacroCycle(); renderNews(); return; }
+  try{
+    const text=await ghGetFile('macro_long.json');
+    mlData=text?JSON.parse(text):null;
+  }catch(e){ fail('macro_long.json',e); mlData=null; }
+  renderCalendar(); renderLiquidity(); renderMacroCycle(); renderNews();
+}
+
+// ---------- BTC局面(structure_watch) ----------
 const PHASE_LABEL={HEDGE_BUILD:'🛡積み上げ',HEDGE_UNWIND:'🔓解除',
   DOUBLE_DECK:'🏗二階建て',LONG_FLUSH:'💥投げ',NEUTRAL:'中立',unknown:'不明'};
 async function loadStructurePhase(){
@@ -247,11 +596,10 @@ async function loadStructurePhase(){
   }catch(e){ fail('structure_state.json',e); $('btcRegime').textContent='—'; }
 }
 
+// ---------- 清算・ETF資金フロー(market_overview.json) ----------
 async function loadMarketOverview(){
   if(!cfg.token){
-    $('equitiesGrid').innerHTML='<div class="card"><h3>—</h3><div class="sub">下の接続設定でトークンを入力してください</div></div>';
     $('liqEtfGrid').innerHTML='<div class="card"><h3>—</h3><div class="sub">下の接続設定でトークンを入力してください</div></div>';
-    $('headlinesBox').innerHTML='<p class="small">下の接続設定でトークンを入力してください</p>';
     return;
   }
   let mo;
@@ -260,23 +608,6 @@ async function loadMarketOverview(){
     mo=JSON.parse(text);
   }catch(e){ fail('market_overview.json',e); return; }
 
-  // 伝統市場セクター
-  const eq=mo.equities||{};
-  const keys=Object.keys(eq);
-  $('equitiesGrid').innerHTML=keys.length?keys.map(k=>{
-    const e=eq[k];
-    const icon=SECTOR_ICONS[k]||'●';
-    const barW=Math.min(100,Math.abs(e.chg_pct)*12);
-    return `<div class="sector-card ${chgClass(e.chg_pct)}">
-      <div class="sector-head"><span class="sector-icon">${icon}</span>${e.label}</div>
-      <div class="sector-chg mono ${chgClass(e.chg_pct)}">
-        <span class="sector-arrow">${chgArrow(e.chg_pct)}</span>${chgSign(e.chg_pct)}%</div>
-      <div class="sector-bar"><div style="width:${barW}%;background:${chgColor(e.chg_pct)}"></div></div>
-      <div class="sub" style="margin-top:8px">${e.value} <span style="opacity:.6">(${e.date})</span></div>
-    </div>`;
-  }).join(''):'<div class="card"><h3>—</h3><div class="sub">データなし</div></div>';
-
-  // 清算・ETF資金フロー
   const liq=mo.liquidations||{}, etf=mo.etf_flows||{};
   const liqKeys=Object.keys(liq), etfKeys=Object.keys(etf);
   let cards='';
@@ -294,13 +625,6 @@ async function loadMarketOverview(){
   });
   $('liqEtfGrid').innerHTML=cards||'<div class="card"><h3>—</h3><div class="sub">'
     +'CoinGlass未契約(COINGLASS_API_KEY未設定)のためデータなし</div></div>';
-
-  // アラブマネー見出し
-  const heads=mo.arab_swf_headlines||[];
-  $('headlinesBox').innerHTML=heads.length?heads.map(h=>
-    `<div class="headline"><a href="${h.link}" target="_blank" rel="noopener">${h.title}</a>
-      <div class="small">${h.pub_date}</div></div>`).join('')
-    :'<p class="small">見出しなし</p>';
 }
 
 async function loadCoinglassSignals(){
@@ -331,7 +655,7 @@ $('cfgSave').onclick=async ()=>{
        branch:$('cfgBranch').value.trim()||'main', token:$('cfgToken').value.trim()};
   localStorage.setItem(CFG_LS, JSON.stringify(cfg));
   saveSharedCfg(cfg.owner, cfg.branch, cfg.token);   // 他ページでも使えるよう共有設定へ
-  await Promise.all([loadStructurePhase(), loadMarketOverview(), loadCoinglassSignals()]);
+  await loadAll();
 };
 
 // ---------- 暗号資産:方向感(CoinGecko、トークン不要) ----------
@@ -454,13 +778,17 @@ async function loadOptions(){
 async function loadAll(){
   errs.length=0;$('errBox').textContent='';
   await Promise.all([loadDominance(),loadOptions(),loadCryptoDirection(),
-    loadStructurePhase(),loadMarketOverview(),loadCoinglassSignals()]);
+    loadStructurePhase(),loadMarketOverview(),loadCoinglassSignals(),
+    loadMacroQuotes(),loadMacroLong()]);
+  updateSectionTs();
   const d=new Date(Date.now()+9*3600*1000);
   $('upd').textContent=`更新 ${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')} JST`;
 }
 $('reload').onclick=loadAll;
 fillCfg();
 loadAll();
+setInterval(()=>{ renderSessions(); renderCalendar(); }, 1000);
+setInterval(()=>{ if(cfg.token) loadAll(); }, 5*60*1000);
 </script>
 </body>
 </html>
