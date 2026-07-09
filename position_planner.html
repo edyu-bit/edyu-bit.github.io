@@ -106,6 +106,11 @@ padding:8px;margin-top:6px}
       <label>直近シグナル(level/signals_log.jsonl)</label>
       <select id="sigSelect"><option value="">— 手入力 —</option></select>
     </div>
+    <div class="field">
+      <label>BingX未約定注文から取込(level/open_orders.json・3時間毎更新)</label>
+      <select id="ooSelect"><option value="">— 手入力 —</option></select>
+      <p class="small" id="ooHint"></p>
+    </div>
   </div>
 
   <div class="card">
@@ -270,6 +275,7 @@ let cfg=Object.assign(
 
 let positions=[], reviews=[], signals=[], cgSignals={}, plans=[], plansSha=null, actionsRaw='', actionsSha=null;
 let posMeta=null, oiRiskP={}, ladderInput=null;   // 口座残高/週次確定損益・OI折れやすさ・週次目標
+let openOrders=[];   // BingX未約定注文(level/open_orders.json、読み取り専用)
 const OI_BAND_COLOR={safe:'var(--ok)',watch:'var(--muted)',partial:'var(--warn)',danger:'var(--up)'};
 function usdFmt(n){ return '$'+(Math.round((n||0)*100)/100).toLocaleString(); }
 function weeklyTargetP(){
@@ -351,6 +357,10 @@ async function loadLevel(){
     const c=await ghGetFile(cfg.level,'coinglass_signals.json');
     cgSignals=c.text?(JSON.parse(c.text).signals||{}):{};
   }catch(e){ cgSignals={}; }
+  try{
+    const oo=await ghGetFile(cfg.level,'open_orders.json');
+    openOrders=oo.text?(JSON.parse(oo.text).orders||[]):[];
+  }catch(e){ openOrders=[]; }
 }
 
 // ---------- ライブ価格(BingX公開API、キー不要) ----------
@@ -432,6 +442,44 @@ $('sigSelect').addEventListener('change',()=>{
   $('bEntry').value=s.entry??'';
   $('bStop').value=s.stop??'';
   $('bTarget').value=s.target??'';
+  $('ooSelect').value='';   // 片方選んだらもう片方はリセット(二重取込防止)
+  recalc();
+  renderCgCard();
+});
+
+// ---------- BingX未約定注文からの取込(計画書_BingX注文取込.md 参照) ----------
+// entry/side/qty/leverageは自動入力。stop/targetは注文にTP/SLが付いていれば自動、
+// 無ければ空欄のまま(手入力が必要)。既にplans.jsonへ取込済みの注文(source_order_id一致)
+// は選択肢から除外し、二重取込を防ぐ。
+function renderOrderSelect(){
+  const importedIds=new Set(plans.map(p=>p.source_order_id).filter(Boolean));
+  const fresh=openOrders.filter(o=>!importedIds.has(o.order_id));
+  const sel=$('ooSelect');
+  sel.innerHTML='<option value="">— 手入力 —</option>'+
+    fresh.map((o,i)=>{
+      const hasSlTp=(o.stop!=null||o.target!=null)?' SL/TP付き':'';
+      return `<option value="${i}">${o.base||''} ${o.side||''} @${o.entry??''} qty${o.qty??''}${hasSlTp}</option>`;
+    }).join('');
+  window._freshOrders=fresh;   // change handlerから参照
+  $('ooHint').textContent=openOrders.length
+    ? `${fresh.length}/${openOrders.length}件が未取込(取込済みは非表示)`
+    : 'open_orders.jsonが未同期、または未約定注文なし';
+}
+$('ooSelect').addEventListener('change',()=>{
+  const i=$('ooSelect').value;
+  if(i==='') return;
+  const o=(window._freshOrders||[])[+i];
+  if(!o) return;
+  $('bBase').value=o.base||'';
+  $('bSide').value=o.side||'LONG';
+  $('bEntry').value=o.entry??'';
+  if(o.leverage!=null) $('bLev').value=o.leverage;
+  if(o.stop!=null) $('bStop').value=o.stop;
+  if(o.target!=null) $('bTarget').value=o.target;
+  if(o.stop==null||o.target==null){
+    showMsgIn('buildMsg','SL/TPは注文に付いていなかったため手入力してください', false);
+  }
+  $('sigSelect').value='';   // 片方選んだらもう片方はリセット
   recalc();
   renderCgCard();
 });
@@ -525,11 +573,13 @@ $('saveBtn').onclick=async ()=>{
   })).filter(t=>isFinite(t.price)&&isFinite(t.pct_to_close));
   const hedgePrice=parseFloat($('bHedgePrice').value);
   const sigIdx=$('sigSelect').value;
+  const ooIdx=$('ooSelect').value;
   const plan={
     id: genId(base),
     base, side: $('bSide').value,
     created_ts: new Date().toISOString(),
     source_signal_id: sigIdx!==''? (signals[+sigIdx].id||null) : null,
+    source_order_id: ooIdx!==''? ((window._freshOrders||[])[+ooIdx]?.order_id||null) : null,
     account_equity_usdt: parseFloat($('bEquity').value)||0,
     risk_pct: parseFloat($('bRisk').value)||0,
     entry: parseFloat($('bEntry').value), stop: parseFloat($('bStop').value),
@@ -546,6 +596,7 @@ $('saveBtn').onclick=async ()=>{
   try{
     await savePlans();
     showMsgIn('buildMsg','計画を保存しました: '+plan.id, true);
+    renderOrderSelect();   // 取込済み注文を選択肢から除外
     renderPlanTab(); renderEvalTab(); renderActTab();
   }catch(e){
     plans.pop();
@@ -820,6 +871,7 @@ async function loadAll(){
   $('upd').textContent='読み込み中…';
   await Promise.all([loadLevel(), loadPlans()]);
   renderSignalSelect();
+  renderOrderSelect();
   renderCgCard();
   renderEvalTab();
   renderPlanTab();
