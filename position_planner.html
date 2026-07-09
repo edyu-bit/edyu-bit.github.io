@@ -128,6 +128,11 @@ padding:8px;margin-top:6px}
     </div>
   </div>
 
+  <div class="card" id="advisorCard">
+    <h2>⚖ ポジションアドバイザー(現在の建玉を踏まえた判定)</h2>
+    <div id="advBody"><span class="small">銘柄と方向を入れると判定します</span></div>
+  </div>
+
   <div class="card">
     <h2>市場データ(CoinGlass)</h2>
     <div class="calc-grid">
@@ -452,8 +457,9 @@ $('sigSelect').addEventListener('change',()=>{
 // 無ければ空欄のまま(手入力が必要)。既にplans.jsonへ取込済みの注文(source_order_id一致)
 // は選択肢から除外し、二重取込を防ぐ。
 function renderOrderSelect(){
-  const importedIds=new Set(plans.map(p=>p.source_order_id).filter(Boolean));
-  const fresh=openOrders.filter(o=>!importedIds.has(o.order_id));
+  // P0-4: 既存plansの数値ID(精度落ち)と新しい文字列IDを両辺String()で正規化して突き合わせる
+  const importedIds=new Set(plans.map(p=>p.source_order_id).filter(Boolean).map(String));
+  const fresh=openOrders.filter(o=>!importedIds.has(String(o.order_id)));
   const sel=$('ooSelect');
   sel.innerHTML='<option value="">— 手入力 —</option>'+
     fresh.map((o,i)=>{
@@ -507,6 +513,100 @@ function renderCgCard(){
 }
 $('bBase').addEventListener('input', renderCgCard);
 
+// ---------- ポジションアドバイザー(見直し指示書§7) ----------
+// 判定ロジックは純関数(DOMアクセス禁止 — nodeでマーカー間を切り出して単体テストする)
+// ADVISOR-PURE-BEGIN
+// 閾値(v1: 全銘柄を1つの相関バケットとして扱う — アルトはBTCベータでほぼ連動が根拠)
+const ADV_SHARE_WARN=0.70, ADV_N_WARN=3;      // 追加後の同方向シェア/件数 → warn
+const ADV_SHARE_DANGER=0.85, ADV_N_DANGER=5;  // → danger
+function advisorAssess(positions, plannedPlans, account, base, side, calc){
+  // 入力: positions=保有建玉 / plannedPlans=status==='planned'の未約定計画 /
+  //       account=posMeta.account({equity,available}) / base,side=フォーム値 /
+  //       calc=recalc()結果({qty,notional,margin})またはnull(入力不足)
+  // 出力: {level:'ok'|'warn'|'danger', lines:string[]}
+  const lines=[];
+  let level='ok';
+  const RANK={ok:0,warn:1,danger:2};
+  const raise=l=>{ if(RANK[l]>RANK[level]) level=l; };
+  const pos=Array.isArray(positions)?positions:[];
+  const planned=Array.isArray(plannedPlans)?plannedPlans:[];
+  const sideUp=String(side||'').toUpperCase();
+  const notionalOf=p=>Math.abs(p.size_usd||0);
+  const longs=pos.filter(p=>p.side==='LONG'), shorts=pos.filter(p=>p.side==='SHORT');
+  const longUsd=longs.reduce((s,p)=>s+notionalOf(p),0);
+  const shortUsd=shorts.reduce((s,p)=>s+notionalOf(p),0);
+  const total=longUsd+shortUsd;
+  const net=longUsd-shortUsd;
+  const usd=n=>'$'+Math.round(n).toLocaleString();
+  // 1. 現状の方向別集計(calcがnullでもこれだけは常に出す)
+  lines.push(`現状: LONG ${usd(longUsd)}×${longs.length}件 / SHORT ${usd(shortUsd)}×${shorts.length}件 / `
+    +`純エクスポージャー ${net>=0?'+':'-'}${usd(Math.abs(net))}`);
+  // 2-3. この計画を足した後の同方向シェアと件数(要calc)
+  if(calc&&isFinite(calc.notional)&&calc.notional>0&&(sideUp==='LONG'||sideUp==='SHORT')){
+    const sameUsd=sideUp==='LONG'?longUsd:shortUsd;
+    const sameN=(sideUp==='LONG'?longs.length:shorts.length)+1;   // 追加後の件数
+    const share=(sameUsd+calc.notional)/(total+calc.notional);
+    if(share>=ADV_SHARE_DANGER&&sameN>=ADV_N_DANGER){
+      raise('danger');
+      lines.push(`同方向集中(危険): 追加後 ${sideUp}シェア ${(share*100).toFixed(0)}%・${sameN}件`);
+    }else if(share>=ADV_SHARE_WARN&&sameN>=ADV_N_WARN){
+      raise('warn');
+      lines.push(`同方向集中(注意): 追加後 ${sideUp}シェア ${(share*100).toFixed(0)}%・${sameN}件`);
+    }
+  }
+  // 4. 同一銘柄・同方向を既に保有 → 積み増しwarn
+  if(base&&pos.some(p=>p.base===base&&p.side===sideUp)){
+    raise('warn');
+    lines.push(`${base} ${sideUp} は既に保有 — 積み増しになる(平均取得と清算距離が動く)`);
+  }
+  // 5. 同一銘柄・逆方向を保有 → 注記のみ(levelは上げない)
+  if(base&&(sideUp==='LONG'||sideUp==='SHORT')){
+    const opp=sideUp==='LONG'?'SHORT':'LONG';
+    if(pos.some(p=>p.base===base&&p.side===opp)){
+      lines.push(`${base} ${opp} を保有中 — 合意ルールでは部分利確が主・ヘッジは補助`);
+    }
+  }
+  // 6. パイプライン情報行。自分自身(保存直後にフォームへ残っている同base/side/
+  //    同notionalの計画)は1件だけ除外する
+  let pipeline=planned.filter(p=>p.side===sideUp);
+  if(calc&&base){
+    const selfIdx=pipeline.findIndex(p=>p.base===base&&p.computed_notional_usd!=null
+      &&Math.abs(p.computed_notional_usd-calc.notional)<=Math.max(1,calc.notional*0.02));
+    if(selfIdx>=0) pipeline=pipeline.slice(0,selfIdx).concat(pipeline.slice(selfIdx+1));
+  }
+  if(pipeline.length){
+    const pUsd=pipeline.reduce((s,p)=>s+(p.computed_notional_usd||0),0);
+    lines.push(`パイプラインに同方向${pipeline.length}件/${usd(pUsd)} が控えている(未約定planned)`);
+  }
+  // 7. 証拠金不足
+  if(calc&&account&&account.available!=null&&isFinite(calc.margin)
+     &&calc.margin>account.available){
+    raise('danger');
+    lines.push(`証拠金不足: 必要証拠金 $${(+calc.margin).toFixed(2)} > 利用可能 $${(+account.available).toFixed(2)}`);
+  }
+  return {level, lines};
+}
+// ADVISOR-PURE-END
+
+const ADV_COLOR={ok:'var(--ok)',warn:'var(--warn)',danger:'var(--up)'};
+const ADV_LABEL={ok:'✓ OK',warn:'⚠ 注意',danger:'⛔ 危険'};
+function advEsc(s){return String(s).replace(/[&<>"']/g,
+  c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function renderAdvisor(calc){
+  const body=$('advBody');
+  if(!body) return;
+  const base=$('bBase').value.trim().toUpperCase();
+  const side=$('bSide').value;
+  const planned=plans.filter(p=>p.status==='planned');
+  const res=advisorAssess(positions, planned, posMeta&&posMeta.account, base, side, calc);
+  const col=ADV_COLOR[res.level]||'var(--muted)';
+  const head=base
+    ? `<span class="chip" style="border-color:${col};color:${col};font-weight:700">${ADV_LABEL[res.level]||res.level}</span>`
+    : '<span class="small">銘柄と方向を入れると判定します</span>';
+  body.innerHTML=head
+    +res.lines.map(l=>`<div class="small" style="margin-top:5px;color:var(--text)">${advEsc(l)}</div>`).join('');
+}
+
 function recalc(){
   const entry=parseFloat($('bEntry').value), stop=parseFloat($('bStop').value),
         target=parseFloat($('bTarget').value), equity=parseFloat($('bEquity').value),
@@ -514,6 +614,7 @@ function recalc(){
   if(!isFinite(entry)||!isFinite(stop)||!isFinite(equity)||!isFinite(risk)||Math.abs(entry-stop)===0){
     $('calcQty').textContent='—'; $('calcNotional').textContent='—';
     $('calcMargin').textContent='—'; $('calcRR').textContent='—';
+    renderAdvisor(null);   // 入力不足でも現状集計だけは出す(§7-8)
     return null;
   }
   const riskUsd=equity*risk/100;
@@ -526,9 +627,13 @@ function recalc(){
   let rr='—';
   if(isFinite(target)) rr=(Math.abs(target-entry)/Math.abs(entry-stop)).toFixed(2);
   $('calcRR').textContent=rr;
-  return {qty,notional,margin};
+  const out={qty,notional,margin};
+  renderAdvisor(out);
+  return out;
 }
 ['bEntry','bStop','bTarget','bEquity','bRisk','bLev'].forEach(id=>$(id).addEventListener('input',recalc));
+$('bBase').addEventListener('input',recalc);    // アドバイザーは銘柄・方向でも再判定
+$('bSide').addEventListener('change',recalc);
 
 function addTpRow(price,pct){
   const div=document.createElement('div');
@@ -574,12 +679,16 @@ $('saveBtn').onclick=async ()=>{
   const hedgePrice=parseFloat($('bHedgePrice').value);
   const sigIdx=$('sigSelect').value;
   const ooIdx=$('ooSelect').value;
+  const oo=ooIdx!==''? (window._freshOrders||[])[+ooIdx] : null;
   const plan={
     id: genId(base),
     base, side: $('bSide').value,
     created_ts: new Date().toISOString(),
     source_signal_id: sigIdx!==''? (signals[+sigIdx].id||null) : null,
-    source_order_id: ooIdx!==''? ((window._freshOrders||[])[+ooIdx]?.order_id||null) : null,
+    // P0-4: 保存時点でString()正規化(以後の取込済み判定を数値/文字列の型不一致で壊さない)
+    source_order_id: (oo&&oo.order_id!=null)? String(oo.order_id) : null,
+    // P0-5/D4: 紙上数量は実注文数量を優先させるためplanに保持
+    source_order_qty: (oo&&oo.qty!=null)? oo.qty : null,
     account_equity_usdt: parseFloat($('bEquity').value)||0,
     risk_pct: parseFloat($('bRisk').value)||0,
     entry: parseFloat($('bEntry').value), stop: parseFloat($('bStop').value),
@@ -876,6 +985,7 @@ async function loadAll(){
   renderEvalTab();
   renderPlanTab();
   renderActTab();
+  recalc();   // データロード後にアドバイザーを初期表示
   const d=new Date(Date.now()+9*3600*1000);
   $('upd').textContent=`${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')} JST 更新`;
 }
